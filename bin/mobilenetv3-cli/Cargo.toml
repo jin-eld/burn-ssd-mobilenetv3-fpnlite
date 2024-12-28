@@ -1,0 +1,19 @@
+[package]
+name = "mobilenetv3-cli"
+description = "MobileNetV3 inference command line utility"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+
+[features]
+pretrained = ["mobilenetv3/pretrained"]
+
+[dependencies]
+argh = "0.1.13"
+burn.workspace = true
+image.workspace = true
+mobilenetv3 = { path = "../../lib/mobilenetv3", features = ["pretrained"] }
+

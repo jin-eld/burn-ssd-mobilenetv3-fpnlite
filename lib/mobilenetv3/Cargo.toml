@@ -1,0 +1,17 @@
+[package]
+name = "mobilenetv3"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[features]
+default = ["pretrained"]
+pretrained = ["burn/network", "dirs"]
+
+[dependencies]
+burn.workspace = true
+burn-import.workspace = true
+dirs = { version = "5.0.1", optional = true }
+serde.workspace = true
