@@ -1,7 +1,9 @@
 # burn-ssd-mobilenetv3-fpnlite
 SSD MobileNet V3 FPNLite implementation in Burn
 
-This project is still a work in progress, the goal is to be able to train an SSD MobileNet FPNLite 320x320 model with an export possibility to TFLite for final inference on the Coral Edge TPU.
+This project is still a work in progress, the goal is to be able to train an
+SSD MobileNet FPNLite 320x320 model with an export possibility to TFLite for
+final inference on the Coral Edge TPU.
 
 ## Current Status
 * implemented MobileNet V3 (inference only, untested)
@@ -22,7 +24,8 @@ Options:
   --help, help      display usage information
 ```
 
-Trying to load a pretrained model will panic (see Known Issues).
+Trying to load a pretrained model will panic
+(see [Known Issues](#known-issues)).
     
 `cargo run --features pretrained  -- /path/to/image.jpg`
 
@@ -31,4 +34,5 @@ empty model, which is only handy during development, but has no real value
 otherwise.
 
 ## Known Issues
-* It is currently not possible to import a pretrained model from PyTorch due to an issue with Burn
+* It is currently not possible to import a pretrained model from PyTorch due
+to an issue with Burn: https://github.com/tracel-ai/burn/issues/2332
