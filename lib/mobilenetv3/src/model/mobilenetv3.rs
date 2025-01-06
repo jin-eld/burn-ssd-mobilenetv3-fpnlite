@@ -1,6 +1,5 @@
 use super::activation::{Activation, Hardswish};
 use super::conv_bn_activation::{ConvBNActivation, ConvBNActivationConfig};
-use super::identity::Identity;
 use super::inverted_residual::{
     BottleneckActivationType, InvertedResidual, InvertedResidualConfig,
 };
@@ -28,7 +27,6 @@ enum LayerType<B: Backend> {
     ConvBNActivation(ConvBNActivation<B>),
     SqueezeExcitation(SqueezeExcitation<B>),
     InvertedResidual(InvertedResidual<B>),
-    Identity(Identity),
 }
 
 impl<B: Backend> LayerType<B> {
@@ -37,7 +35,6 @@ impl<B: Backend> LayerType<B> {
             Self::ConvBNActivation(block) => block.forward(x),
             Self::SqueezeExcitation(block) => block.forward(x),
             Self::InvertedResidual(block) => block.forward(x),
-            Self::Identity(block) => block.forward(x),
         }
     }
 }
