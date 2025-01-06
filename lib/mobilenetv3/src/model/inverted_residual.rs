@@ -46,7 +46,14 @@ impl InvertedResidualConfig {
             Some(
                 ConvBNActivationConfig::new(input_channels, expanded_channels)
                     .with_kernel_size(1)
-                    .with_activation(Activation::Relu(Relu::new()))
+                    .with_activation(match self.activation_type {
+                        BottleneckActivationType::Hardswish => {
+                            Activation::Hardswish(Hardswish::new())
+                        }
+                        BottleneckActivationType::Relu => {
+                            Activation::Relu(Relu::new())
+                        }
+                    })
                     .init(device),
             )
         } else {
