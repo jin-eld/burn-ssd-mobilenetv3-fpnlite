@@ -74,7 +74,7 @@ fn load_and_preprocess_image<B: Backend>(
 
     // Create tensor from image data
     let img_tensor =
-        to_tensor(resized.into_rgb8().into_raw(), [width, height, 3], device)
+        to_tensor(resized.into_rgb8().into_raw(), [height, width, 3], device)
             .unsqueeze::<4>(); // [B, C, H, W]
 
     return img_tensor;
@@ -84,7 +84,7 @@ fn main() {
     let args: Arguments = argh::from_env();
 
     let device = burn::backend::wgpu::WgpuDevice::default();
-    let model: mobilenetv3::MobileNetV3<MyAutodiffBackend>;
+    let model: mobilenetv3::MobileNetV3<MyBackend>;
 
     #[cfg(feature = "pretrained")]
     {
@@ -126,7 +126,7 @@ fn main() {
     }
 
     // Load and preprocess the actual image
-    let input = load_and_preprocess_image::<MyAutodiffBackend>(
+    let input = load_and_preprocess_image::<MyBackend>(
         &args.image_path,
         WIDTH,
         HEIGHT,

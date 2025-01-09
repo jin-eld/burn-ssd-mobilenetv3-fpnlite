@@ -47,7 +47,7 @@ impl ConvBNActivationConfig {
             .init(device),
             bn: BatchNormConfig::new(self.out_planes)
                 .with_epsilon(0.001) // PyTorch defaults
-                .with_momentum(0.1)
+                .with_momentum(0.01)
                 .init(device),
             activation: self.activation.clone(),
         };

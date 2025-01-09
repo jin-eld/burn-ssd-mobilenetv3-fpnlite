@@ -5,7 +5,7 @@ use burn::{
     nn::{
         conv::{Conv2d, Conv2dConfig},
         pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
-        HardSigmoid, HardSigmoidConfig, Relu,
+        HardSigmoid, HardSigmoidConfig, PaddingConfig2d, Relu,
     },
     tensor::{backend::Backend, Tensor},
 };
@@ -31,12 +31,14 @@ impl SqueezeExcitationConfig {
                 [self.input_channels, squeeze_channels],
                 [1, 1],
             )
+            .with_padding(PaddingConfig2d::Explicit(0, 0))
             .init(device),
             relu: Relu::new(),
             fc2: Conv2dConfig::new(
                 [squeeze_channels, self.input_channels],
                 [1, 1],
             )
+            .with_padding(PaddingConfig2d::Explicit(0, 0))
             .init(device),
             avgpool: AdaptiveAvgPool2dConfig::new([1, 1]).init(),
             hardsigmoid: HardSigmoidConfig::new().init(),
@@ -59,6 +61,6 @@ impl<B: Backend> SqueezeExcitation<B> {
         let scale = self.fc1.forward(scale);
         let scale = self.relu.forward(scale);
         let scale = self.fc2.forward(scale);
-        return self.hardsigmoid.forward(scale);
+        return self.hardsigmoid.forward(scale) * input;
     }
 }
