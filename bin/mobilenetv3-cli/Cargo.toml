@@ -9,6 +9,7 @@ publish.workspace = true
 
 
 [features]
+default = ["pretrained"]
 pretrained = ["mobilenetv3/pretrained"]
 
 [dependencies]
