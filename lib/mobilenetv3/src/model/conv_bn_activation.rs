@@ -11,23 +11,23 @@ use burn::{
 
 #[derive(Config, Debug)]
 pub struct ConvBNActivationConfig {
-    in_planes: usize,
-    out_planes: usize,
+    pub in_planes: usize,
+    pub out_planes: usize,
 
     #[config(default = "3")]
-    kernel_size: usize,
+    pub kernel_size: usize,
 
     #[config(default = "1")]
-    stride: usize,
+    pub stride: usize,
 
     #[config(default = "1")]
-    groups: usize,
+    pub groups: usize,
 
     #[config(default = "1")]
-    dilation: usize,
+    pub dilation: usize,
 
     #[config(default = "Activation::Relu6(Relu6::new())")]
-    activation: Activation,
+    pub activation: Activation,
 }
 
 impl ConvBNActivationConfig {
@@ -62,8 +62,8 @@ pub struct ConvBNActivation<B: Backend> {
 }
 
 impl<B: Backend> ConvBNActivation<B> {
-    pub fn forward(&self, x: Tensor<B, 4>) -> Tensor<B, 4> {
-        let x = self.conv.forward(x);
+    pub fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+        let x = self.conv.forward(input);
         let x = self.bn.forward(x);
         return self.activation.forward(x);
     }

@@ -12,10 +12,10 @@ use burn::{
 
 #[derive(Config, Debug)]
 pub struct SqueezeExcitationConfig {
-    input_channels: usize,
+    pub input_channels: usize,
 
     #[config(default = "4")]
-    squeeze_factor: usize,
+    pub squeeze_factor: usize,
 }
 
 impl SqueezeExcitationConfig {
@@ -57,10 +57,10 @@ pub struct SqueezeExcitation<B: Backend> {
 
 impl<B: Backend> SqueezeExcitation<B> {
     pub fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
-        let scale = self.avgpool.forward(input.clone());
-        let scale = self.fc1.forward(scale);
-        let scale = self.relu.forward(scale);
-        let scale = self.fc2.forward(scale);
-        return self.hardsigmoid.forward(scale) * input;
+        let x = self.avgpool.forward(input.clone());
+        let x = self.fc1.forward(x);
+        let x = self.relu.forward(x);
+        let x = self.fc2.forward(x);
+        return self.hardsigmoid.forward(x) * input;
     }
 }

@@ -31,7 +31,7 @@ impl<B: Backend> Normalizer<B> {
             device,
         );
 
-        Self { mean, std }
+        return Self { mean, std };
     }
 
     /// Normalizes the input image according to the ImageNet dataset.

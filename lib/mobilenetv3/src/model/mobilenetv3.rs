@@ -30,11 +30,11 @@ enum LayerType<B: Backend> {
 }
 
 impl<B: Backend> LayerType<B> {
-    fn forward(&self, x: Tensor<B, 4>) -> Tensor<B, 4> {
+    fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
         match self {
-            Self::ConvBNActivation(block) => block.forward(x),
-            Self::SqueezeExcitation(block) => block.forward(x),
-            Self::InvertedResidual(block) => block.forward(x),
+            Self::ConvBNActivation(block) => block.forward(input),
+            Self::SqueezeExcitation(block) => block.forward(input),
+            Self::InvertedResidual(block) => block.forward(input),
         }
     }
 }
@@ -48,11 +48,11 @@ pub struct Classifier<B: Backend> {
 }
 
 impl<B: Backend> Classifier<B> {
-    pub fn forward(&self, x: Tensor<B, 2>) -> Tensor<B, 2> {
-        let x = self.fc1.forward(x);
+    pub fn forward(&self, input: Tensor<B, 2>) -> Tensor<B, 2> {
+        let x = self.fc1.forward(input);
         let x = self.activation.forward(x);
         let x = self.dropout.forward(x);
-        self.fc2.forward(x)
+        return self.fc2.forward(x);
     }
 }
 
@@ -244,7 +244,8 @@ fn load_weights_record<B: Backend>(
             "features\\.([2-9]|1[0-5])\\.block\\.1\\.1\\.(.+)",
             "features.$1.depthwise_conv.bn.$2",
         )
-        // NOTE: block.2 remaps to project_conv when se_layer is not present, but block.3 otherwise
+        // NOTE: block.2 remaps to project_conv when se_layer is not present,
+        // but block.3 otherwise
         // For large, se_layer is present in features.[4,5,6,11,12,13,14,15]
         // Squeeze and Excitation layers
         .with_key_remap(
@@ -288,7 +289,7 @@ fn load_weights_record<B: Backend>(
 #[derive(Config, Debug)]
 pub struct MobileNetV3Config {
     #[config(default = "1000")]
-    num_classes: usize,
+    pub num_classes: usize,
 }
 
 impl MobileNetV3Config {
@@ -350,6 +351,7 @@ impl MobileNetV3Config {
             classifier,
         };
     }
+
     pub fn init_large<B: Backend>(&self, device: &B::Device) -> MobileNetV3<B> {
         let (inverted_residual_setting, last_channel) =
             mobilenet_v3_conf(MobileNetV3Arch::Large, 1.0, false, false);
@@ -376,7 +378,7 @@ impl MobileNetV3Config {
 #[cfg(feature = "pretrained")]
 #[derive(Config, Debug)]
 pub struct MobileNetV3PretrainedConfig {
-    weights_type: weights::MobileNetV3,
+    pub weights_type: weights::MobileNetV3,
 }
 
 #[cfg(feature = "pretrained")]

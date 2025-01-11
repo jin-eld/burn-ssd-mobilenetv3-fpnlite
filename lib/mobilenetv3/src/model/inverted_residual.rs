@@ -127,9 +127,9 @@ impl<B: Backend> InvertedResidual<B> {
         x = self.project_conv.forward(x);
 
         if self.use_res_connect {
-            x + input
-        } else {
-            x
+            x = x + input;
         }
+
+        return x;
     }
 }

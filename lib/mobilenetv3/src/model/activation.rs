@@ -24,8 +24,8 @@ impl Relu6 {
         &self,
         input: Tensor<B, D>,
     ) -> Tensor<B, D> {
-        let relu_output = self.relu.forward(input);
-        return relu_output.clamp_max(6.0);
+        let x = self.relu.forward(input);
+        return x.clamp_max(6.0);
     }
 }
 
@@ -46,8 +46,8 @@ impl Hardswish {
         input: Tensor<B, D>,
     ) -> Tensor<B, D> {
         // Hardswish: x * ReLU6(x + 3) / 6
-        let relu6_output = self.relu6.forward(input.clone().add_scalar(3.0));
-        return input.mul(relu6_output).div_scalar(6.0);
+        let x = self.relu6.forward(input.clone().add_scalar(3.0));
+        return input.mul(x).div_scalar(6.0);
     }
 }
 
@@ -120,6 +120,6 @@ impl<'de> Deserialize<'de> for Activation {
             }
         }
 
-        deserializer.deserialize_str(ActivationVisitor)
+        return deserializer.deserialize_str(ActivationVisitor);
     }
 }
