@@ -1,5 +1,5 @@
 use argh::FromArgs;
-use burn::backend::{Autodiff, Wgpu};
+use burn::backend::Wgpu;
 use burn::prelude::*;
 use burn::tensor::{
     backend::Backend, cast::ToElement, Element, Tensor, TensorData,
@@ -14,7 +14,6 @@ use mobilenetv3::MobileNetV3Config;
 use mobilenetv3::{weights, MobileNetV3PretrainedConfig};
 
 type MyBackend = Wgpu<f32, i32>;
-type MyAutodiffBackend = Autodiff<MyBackend>;
 
 #[derive(FromArgs)]
 /// mobilenetv3-cli command line arguments
