@@ -40,23 +40,6 @@ impl<B: Backend> LayerType<B> {
 }
 
 #[derive(Module, Debug)]
-enum LayerType2D<B: Backend> {
-    Linear(Linear<B>),
-    Activation(Activation),
-    Dropout(Dropout),
-}
-
-impl<B: Backend> LayerType2D<B> {
-    pub fn forward(&self, x: Tensor<B, 2>) -> Tensor<B, 2> {
-        match self {
-            LayerType2D::Linear(layer) => layer.forward(x),
-            LayerType2D::Dropout(layer) => layer.forward(x),
-            LayerType2D::Activation(layer) => layer.forward(x),
-        }
-    }
-}
-
-#[derive(Module, Debug)]
 pub struct Classifier<B: Backend> {
     fc1: Linear<B>,
     activation: Hardswish,
