@@ -31,14 +31,14 @@ impl SqueezeExcitationConfig {
                 [self.input_channels, squeeze_channels],
                 [1, 1],
             )
-            .with_padding(PaddingConfig2d::Explicit(0, 0))
+            .with_padding(PaddingConfig2d::Valid)
             .init(device),
             relu: Relu::new(),
             fc2: Conv2dConfig::new(
                 [squeeze_channels, self.input_channels],
                 [1, 1],
             )
-            .with_padding(PaddingConfig2d::Explicit(0, 0))
+            .with_padding(PaddingConfig2d::Valid)
             .init(device),
             avgpool: AdaptiveAvgPool2dConfig::new([1, 1]).init(),
             hardsigmoid: HardSigmoidConfig::new().init(),
