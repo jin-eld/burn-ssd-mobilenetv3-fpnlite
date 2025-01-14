@@ -2,7 +2,8 @@ use argh::FromArgs;
 use burn::backend::Wgpu;
 use burn::prelude::*;
 use burn::tensor::{
-    backend::Backend, cast::ToElement, Element, Tensor, TensorData,
+    activation::softmax, backend::Backend, cast::ToElement, Element, Tensor,
+    TensorData,
 };
 use mobilenetv3::imagenet::{Normalizer, CLASSES, HEIGHT, WIDTH};
 use std::process;
@@ -28,15 +29,15 @@ struct Arguments {
 }
 
 fn print_top_prediction<B: Backend>(output: Tensor<B, 2>) {
-    let (score, idx) = output.max_dim_with_indices(1);
+    // apply softmax to convert logits to probabilities
+    let sm = softmax(output, 1);
+    let (score, idx) = sm.max_dim_with_indices(1);
     let idx = idx.into_scalar().to_usize();
+    let score = score.into_scalar();
 
-    println!(
-        "Predicted: {}\nCategory Id: {}\nScore: {:.4}",
-        CLASSES[idx],
-        idx,
-        score.into_scalar()
-    );
+    println!("Category ID: {}", idx);
+    println!("Predicted Class: {}", CLASSES[idx]);
+    println!("Confidence Score: {}", score);
 }
 
 // From https://github.com/tracel-ai/models/blob/main/mobilenetv2-burn/examples/inference.rs
