@@ -6,7 +6,7 @@ SSD MobileNet FPNLite 320x320 model with an export possibility to TFLite for
 final inference on the Coral Edge TPU.
 
 ## Current Status
-* implemented MobileNet V3 (inference does not yet work correctly)
+* implemented MobileNet V3 inference
 * import of Pytorch `.pth` weights for MobileNetV3 "large" and "small"
 
 ## Running
@@ -30,7 +30,3 @@ Options:
 Running the cli utility without the `pretrained` feature will use an
 empty model, which is only handy during development, but has no real value
 otherwise.
-
-## Known Issues
-* Currently inference produces inconsistent results, most likely something is
-  either missing or has not been initialized correctly; debugging in progress.
