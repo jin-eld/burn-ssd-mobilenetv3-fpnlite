@@ -41,7 +41,9 @@ impl SqueezeExcitationConfig {
             .with_padding(PaddingConfig2d::Valid)
             .init(device),
             avgpool: AdaptiveAvgPool2dConfig::new([1, 1]).init(),
-            hardsigmoid: HardSigmoidConfig::new().init(),
+            hardsigmoid: HardSigmoidConfig::new()
+                .with_alpha(1_f64 / 6_f64) // match PyTorch implementation
+                .init(),
         };
     }
 }
