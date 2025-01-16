@@ -7,8 +7,7 @@
 use burn::prelude::Shape;
 use burn::tensor::{backend::Backend, Device, Tensor, TensorData};
 
-pub const HEIGHT: usize = 224;
-pub const WIDTH: usize = 224;
+pub const IMAGE_SIZE: u32 = 224; // width = height
 
 const MEAN: [f32; 3] = [0.485, 0.456, 0.406];
 const STD: [f32; 3] = [0.229, 0.224, 0.225];
@@ -42,7 +41,18 @@ impl<B: Backend> Normalizer<B> {
     /// The normalization is done according to the following formula:
     /// `input = (input - mean) / std`
     pub fn normalize(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
-        (input - self.mean.clone()) / self.std.clone()
+        return (input - self.mean.clone()) / self.std.clone();
+    }
+
+    /// Reverses the normalization for the input image.
+    ///
+    /// The input image should be in the range [-1, 1].
+    /// The output image will be in the range [0, 1].
+    ///
+    /// The reverse normalization is done according to the following formula:
+    /// `input = (normalized * std) + mean`
+    pub fn denormalize(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+        return (input * self.std.clone()) + self.mean.clone();
     }
 }
 

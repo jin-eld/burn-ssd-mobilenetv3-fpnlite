@@ -2,11 +2,11 @@ use argh::FromArgs;
 use burn::backend::Wgpu;
 use burn::prelude::*;
 use burn::tensor::{
-    activation::softmax, backend::Backend, cast::ToElement, Element, Tensor,
-    TensorData,
+    activation::softmax, backend::Backend, cast::ToElement, Tensor,
 };
-use mobilenetv3::imagenet::{Normalizer, CLASSES, HEIGHT, WIDTH};
+use mobilenetv3::imagenet::{Normalizer, CLASSES, IMAGE_SIZE};
 use std::process;
+use transforms;
 
 #[cfg(not(feature = "pretrained"))]
 use mobilenetv3::MobileNetV3Config;
@@ -40,22 +40,9 @@ fn print_top_prediction<B: Backend>(output: Tensor<B, 2>) {
     println!("Confidence Score: {}", score);
 }
 
-// From https://github.com/tracel-ai/models/blob/main/mobilenetv2-burn/examples/inference.rs
-fn to_tensor<B: Backend, T: Element>(
-    data: Vec<T>,
-    shape: [usize; 3],
-    device: &Device<B>,
-) -> Tensor<B, 3> {
-    Tensor::<B, 3>::from_data(TensorData::new(data, Shape::new(shape)), device)
-        // [H, W, C] -> [C, H, W]
-        .permute([2, 0, 1])
-        / 255 // normalize between [0, 1]
-}
-
 fn load_and_preprocess_image<B: Backend>(
     image_path: &str,
-    width: usize,
-    height: usize,
+    target_size: u32,
     device: &Device<B>,
 ) -> Tensor<B, 4> {
     let img = match image::open(&image_path) {
@@ -66,18 +53,10 @@ fn load_and_preprocess_image<B: Backend>(
         }
     };
 
-    let resized = img.resize_exact(
-        width as u32,
-        height as u32,
-        image::imageops::FilterType::Triangle,
-    );
-
-    // Create tensor from image data
+    let processed = transforms::img_resize_and_center_crop(&img, target_size);
     let img_tensor =
-        to_tensor(resized.into_rgb8().into_raw(), [height, width, 3], device)
-            .unsqueeze::<4>(); // [B, C, H, W]
-
-    return img_tensor;
+        transforms::img_to_tensor(processed, device).unsqueeze::<4>();
+    return Normalizer::new(device).normalize(img_tensor);
 }
 
 fn main() {
@@ -125,15 +104,11 @@ fn main() {
         };
     }
 
-    // Load and preprocess the actual image
     let input = load_and_preprocess_image::<MyBackend>(
         &args.image_path,
-        WIDTH,
-        HEIGHT,
+        IMAGE_SIZE,
         &device,
     );
-
-    let input = Normalizer::new(&device).normalize(input);
 
     let output = model.forward(input);
     print_top_prediction(output);

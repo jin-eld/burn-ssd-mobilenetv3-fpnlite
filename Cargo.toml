@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "lib/mobilenetv3",
+    "lib/transforms",
     "bin/mobilenetv3-cli"
 ]
 

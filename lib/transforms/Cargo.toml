@@ -1,0 +1,13 @@
+[package]
+name = "transforms"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+burn.workspace = true
+
+image = { version = "0.25.5", features = [ "png", "jpeg" ] }
+

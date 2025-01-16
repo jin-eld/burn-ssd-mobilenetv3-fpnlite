@@ -17,4 +17,4 @@ argh = "0.1.13"
 burn.workspace = true
 image.workspace = true
 mobilenetv3 = { path = "../../lib/mobilenetv3", features = ["pretrained"] }
-
+transforms = { path = "../../lib/transforms" }
