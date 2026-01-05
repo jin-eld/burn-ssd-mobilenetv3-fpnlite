@@ -57,7 +57,7 @@ impl ConvBNActivationConfig {
 #[derive(Module, Debug)]
 pub struct ConvBNActivation<B: Backend> {
     conv: Conv2d<B>,
-    bn: BatchNorm<B, 2>,
+    bn: BatchNorm<B>,
     activation: Activation,
 }
 

@@ -1,6 +1,6 @@
+#![recursion_limit = "256"] // as suggested by burn-wgpu docs
 use argh::FromArgs;
-use burn::backend::Wgpu;
-use burn::prelude::*;
+use burn::backend::{wgpu::WgpuDevice, Wgpu};
 use burn::tensor::{
     activation::softmax, backend::Backend, cast::ToElement, Tensor,
 };
@@ -8,13 +8,15 @@ use mobilenetv3::imagenet::{Normalizer, CLASSES, IMAGE_SIZE};
 use std::process;
 use transforms;
 
+// use burn::backend::Autodiff;
+// type MyBackend = Autodiff<Wgpu>;
+type MyBackend = Wgpu;
+
 #[cfg(not(feature = "pretrained"))]
 use mobilenetv3::MobileNetV3Config;
 
 #[cfg(feature = "pretrained")]
 use mobilenetv3::{weights, MobileNetV3PretrainedConfig};
-
-type MyBackend = Wgpu<f32, i32>;
 
 #[derive(FromArgs)]
 /// mobilenetv3-cli command line arguments
@@ -31,9 +33,12 @@ struct Arguments {
 fn print_top_prediction<B: Backend>(output: Tensor<B, 2>) {
     // apply softmax to convert logits to probabilities
     let sm = softmax(output, 1);
-    let (score, idx) = sm.max_dim_with_indices(1);
+
+    let score = sm.clone().max_dim(1);
+    let idx = sm.argmax(1);
+
     let idx = idx.into_scalar().to_usize();
-    let score = score.into_scalar();
+    let score = score.into_scalar().to_f32();
 
     println!("Category ID: {}", idx);
     println!("Predicted Class: {}", CLASSES[idx]);
@@ -43,7 +48,7 @@ fn print_top_prediction<B: Backend>(output: Tensor<B, 2>) {
 fn load_and_preprocess_image<B: Backend>(
     image_path: &str,
     target_size: u32,
-    device: &Device<B>,
+    device: &B::Device,
 ) -> Tensor<B, 4> {
     let img = match image::open(&image_path) {
         Ok(img) => img,
@@ -56,13 +61,14 @@ fn load_and_preprocess_image<B: Backend>(
     let processed = transforms::img_resize_and_center_crop(&img, target_size);
     let img_tensor =
         transforms::img_to_tensor(processed, device).unsqueeze::<4>();
+
     return Normalizer::new(device).normalize(img_tensor);
 }
 
 fn main() {
     let args: Arguments = argh::from_env();
 
-    let device = burn::backend::wgpu::WgpuDevice::default();
+    let device = WgpuDevice::default();
     let model: mobilenetv3::MobileNetV3<MyBackend>;
 
     #[cfg(feature = "pretrained")]
@@ -77,13 +83,12 @@ fn main() {
             None => weights::MobileNetV3::PyTorchLarge, // default
         };
 
-        model = match MobileNetV3PretrainedConfig::new(weights).init(&device) {
-            Ok(model) => model,
-            Err(e) => {
+        model = MobileNetV3PretrainedConfig::new(weights)
+            .init(&device)
+            .unwrap_or_else(|e| {
                 eprintln!("Failed to load model: {}", e);
                 std::process::exit(1);
-            }
-        };
+            });
     }
 
     #[cfg(not(feature = "pretrained"))]
