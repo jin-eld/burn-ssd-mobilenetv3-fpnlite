@@ -16,8 +16,10 @@ readme = "README.md"
 publish = false
 
 [workspace.dependencies]
-burn = { version = "0.19", features = ["train", "wgpu"] }
-burn-import = "0.19"
+burn = { version = "0.20", features = ["train", "wgpu"] }
+burn-import = "0.20"
 image = { version = "0.25.5", features = [ "png", "jpeg" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+mobilenetv3 = { path = "lib/mobilenetv3" }
