@@ -1,0 +1,12 @@
+[package]
+name = "ssd"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+burn.workspace = true
+mobilenetv3.workspace = true
+fpnlite.workspace = true

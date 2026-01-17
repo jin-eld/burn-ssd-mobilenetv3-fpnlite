@@ -6,6 +6,7 @@ mod squeeze_excitation;
 mod util;
 
 pub mod mobilenetv3;
+pub use activation::Relu6;
 
 #[cfg(feature = "pretrained")]
 pub mod weights;

@@ -56,6 +56,7 @@ impl<B: Backend> Classifier<B> {
     }
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum MobileNetV3Arch {
     Large,
     Small,
@@ -91,7 +92,7 @@ fn mobilenet_v3_conf(
         )
     };
 
-    const RE: BottleneckActivationType = BottleneckActivationType::Relu;
+    const RE: BottleneckActivationType = BottleneckActivationType::Relu6;
     const HS: BottleneckActivationType = BottleneckActivationType::Hardswish;
 
     match arch {
@@ -423,5 +424,49 @@ impl<B: Backend> MobileNetV3<B> {
         let reshaped = x.reshape([batch_size, num_elements]);
 
         return self.classifier.forward(reshaped);
+    }
+
+    // return feature maps C3 (medium res) and C4 (low res) for FPNLitea
+    pub fn forward_features(
+        &self,
+        input: Tensor<B, 4>,
+    ) -> (Tensor<B, 4>, Tensor<B, 4>) {
+        let mut x = input;
+        let mut c3 = None;
+        let mut c4 = None;
+
+        // Track previous height to detect downsampling
+        let mut prev_h = x.shape().dims[2];
+        let mut current_stride = 1;
+
+        for layer in self.features.iter() {
+            // Forward pass
+            x = layer.forward(x);
+
+            // Current spatial size
+            let shape = x.shape().dims;
+            let h = shape[2];
+
+            // Detect downsampling: height reduction => stride *= 2
+            if h < prev_h {
+                current_stride *= 2;
+                prev_h = h;
+            }
+
+            // C3 = first feature at stride 16
+            if current_stride == 16 && c3.is_none() {
+                c3 = Some(x.clone());
+            }
+
+            // C4 = first feature at stride 32
+            if current_stride == 32 && c4.is_none() {
+                c4 = Some(x.clone());
+            }
+        }
+
+        return (
+            c3.expect("failed to extract C3"),
+            c4.expect("failed to extract C4"),
+        );
     }
 }

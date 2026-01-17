@@ -24,8 +24,7 @@ impl Relu6 {
         &self,
         input: Tensor<B, D>,
     ) -> Tensor<B, D> {
-        let x = self.relu.forward(input);
-        return x.clamp_max(6.0);
+        return input.clamp(0.0, 6.0);
     }
 }
 

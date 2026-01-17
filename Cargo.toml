@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "lib/mobilenetv3",
+    "lib/fpnlite",
+    "lib/ssd",
     "lib/transforms",
     "bin/mobilenetv3-cli"
 ]
@@ -23,3 +25,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 mobilenetv3 = { path = "lib/mobilenetv3" }
+fpnlite = { path = "lib/fpnlite" }

@@ -11,10 +11,13 @@ use burn::{
 };
 use serde::{Deserialize, Serialize};
 
+use crate::Relu6;
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum BottleneckActivationType {
     Hardswish,
     Relu,
+    Relu6,
 }
 
 #[derive(Config, Debug)]
@@ -53,6 +56,9 @@ impl InvertedResidualConfig {
                         BottleneckActivationType::Relu => {
                             Activation::Relu(Relu::new())
                         }
+                        BottleneckActivationType::Relu6 => {
+                            Activation::Relu6(Relu6::new())
+                        }
                     })
                     .init(device),
             )
@@ -73,6 +79,9 @@ impl InvertedResidualConfig {
                     }
                     BottleneckActivationType::Relu => {
                         Activation::Relu(Relu::new())
+                    }
+                    BottleneckActivationType::Relu6 => {
+                        Activation::Relu6(Relu6::new())
                     }
                 })
                 .init(device);
