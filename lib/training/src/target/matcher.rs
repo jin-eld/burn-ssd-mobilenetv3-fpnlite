@@ -1,4 +1,4 @@
-use crate::ops::iou::iou_matrix;
+use ssd::ops::iou::iou_matrix;
 
 /// SSD-style anchor matcher.
 ///
@@ -11,6 +11,7 @@ use crate::ops::iou::iou_matrix;
 /// -1 = ignore
 ///  0 = background
 /// >0 = class index
+#[derive(Clone, Debug)]
 pub struct Matcher {
     pub positive_iou_threshold: f32,
     pub negative_iou_threshold: f32,
@@ -18,10 +19,10 @@ pub struct Matcher {
 
 impl Matcher {
     pub fn new(pos: f32, neg: f32) -> Self {
-        Self {
+        return Self {
             positive_iou_threshold: pos,
             negative_iou_threshold: neg,
-        }
+        };
     }
 
     /// Match anchors to ground-truth boxes.
@@ -43,15 +44,15 @@ impl Matcher {
         let num_anchors = anchors.len();
         let num_gt = gt_boxes.len();
 
-        // Edge case: no ground truth → all background, zero deltas
+        // edge case: no ground truth -> all background, zero deltas
         if num_gt == 0 {
             return (vec![0; num_anchors], vec![[0.0; 4]; num_anchors]);
         }
 
-        // 1. IoU matrix [A, G]
+        // IoU matrix [A, G]
         let ious = iou_matrix(anchors, gt_boxes);
 
-        // 2. For each anchor, find best GT
+        // for each anchor, find best GT
         let mut best_gt_for_anchor = vec![0usize; num_anchors];
         let mut best_iou_for_anchor = vec![0.0f32; num_anchors];
 
@@ -65,7 +66,7 @@ impl Matcher {
             }
         }
 
-        // 3. Initialize labels: -1 = ignore
+        // initialize labels: -1 = ignore
         let mut labels = vec![-1i32; num_anchors];
 
         for a in 0..num_anchors {
@@ -77,7 +78,7 @@ impl Matcher {
             }
         }
 
-        // 4. Ensure each GT has at least one positive anchor
+        // ensure each GT has at least one positive anchor
         for g in 0..num_gt {
             let mut best_anchor = 0usize;
             let mut best_iou = -1.0f32;
@@ -94,7 +95,7 @@ impl Matcher {
             best_gt_for_anchor[best_anchor] = g;
         }
 
-        // 5. Encode regression targets for positive anchors
+        // encode regression targets for positive anchors
         let mut encoded = vec![[0.0; 4]; num_anchors];
 
         for a in 0..num_anchors {
@@ -104,7 +105,7 @@ impl Matcher {
             }
         }
 
-        (labels, encoded)
+        return (labels, encoded);
     }
 }
 
@@ -163,13 +164,13 @@ mod tests {
         let (labels, _encoded) =
             matcher.match_anchors(&anchors, &gt_boxes, &gt_labels);
 
-        // Even with IoU=0, SSD forces a positive match for each GT
+        // even with IoU=0, SSD forces a positive match for each GT
         assert_eq!(labels[0], 1);
     }
 
     #[test]
     fn test_matcher_ensures_each_gt_has_positive() {
-        // Two anchors, one GT; one anchor overlaps more
+        // two anchors, one GT; one anchor overlaps more
         let anchors = vec![[0.5, 0.5, 0.4, 0.4], [0.2, 0.2, 0.1, 0.1]];
         let gt_boxes = vec![[0.5, 0.5, 0.4, 0.4]];
         let gt_labels = vec![2];
@@ -178,7 +179,7 @@ mod tests {
         let (labels, _encoded) =
             matcher.match_anchors(&anchors, &gt_boxes, &gt_labels);
 
-        // At least one anchor must be positive with label 2
+        // at least one anchor must be positive with label 2
         assert!(labels.iter().any(|&l| l == 2));
     }
 
@@ -198,7 +199,7 @@ mod tests {
 
     #[test]
     fn test_matcher_forced_positive_even_with_zero_iou() {
-        // Two anchors far away from the GT box → IoU = 0 for both
+        // two anchors far away from the GT box → IoU = 0 for both
         let anchors = vec![[0.1, 0.1, 0.1, 0.1], [0.2, 0.2, 0.1, 0.1]];
 
         let gt_boxes = vec![
@@ -211,13 +212,13 @@ mod tests {
         let (labels, _encoded) =
             matcher.match_anchors(&anchors, &gt_boxes, &gt_labels);
 
-        // At least one anchor must be assigned class 5
+        // at least one anchor must be assigned class 5
         assert!(
             labels.iter().any(|&l| l == 5),
             "Matcher must force a positive match even when IoU = 0"
         );
 
-        // The other anchor should be background (0) or ignore (-1),
+        // the other anchor should be background (0) or ignore (-1),
         // depending on thresholds — both are valid SSD behavior.
         let positives = labels.iter().filter(|&&l| l == 5).count();
         assert_eq!(

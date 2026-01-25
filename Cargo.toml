@@ -25,5 +25,6 @@ image = { version = "0.25.5", features = [ "png", "jpeg" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-mobilenetv3 = { path = "lib/mobilenetv3" }
 fpnlite = { path = "lib/fpnlite" }
+mobilenetv3 = { path = "lib/mobilenetv3" }
+ssd = { path = "lib/ssd" }

@@ -8,3 +8,4 @@ publish.workspace = true
 
 [dependencies]
 burn.workspace = true
+ssd.workspace = true
