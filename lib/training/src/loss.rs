@@ -4,6 +4,38 @@ use burn::{
     tensor::{backend::Backend, Int, Tensor},
 };
 
+#[derive(Clone, Debug)]
+pub struct SSDLoss {
+    pub cls_weight: f32,
+    pub reg_weight: f32,
+}
+
+impl SSDLoss {
+    pub fn new(cls_weight: f32, reg_weight: f32) -> Self {
+        return Self {
+            cls_weight,
+            reg_weight,
+        };
+    }
+
+    pub fn forward<B: Backend>(
+        &self,
+        pred_logits: Tensor<B, 3>,      // [N, A, C]
+        pred_boxes: Tensor<B, 3>,       // [N, A, 4]
+        tgt_classes: Tensor<B, 2, Int>, // [N, A]
+        tgt_boxes: Tensor<B, 3>,        // [N, A, 4]
+        pos_mask: Tensor<B, 2, Int>,    // [N, A]
+    ) -> (Tensor<B, 1>, Tensor<B, 1>, Tensor<B, 1>) {
+        let cls_loss = sigmoid_focal_loss(pred_logits, tgt_classes, 0.25, 2.0);
+        let reg_loss = ssd_regression_loss(pred_boxes, tgt_boxes, pos_mask);
+
+        let total = cls_loss.clone() * self.cls_weight
+            + reg_loss.clone() * self.reg_weight;
+
+        return (total, cls_loss, reg_loss);
+    }
+}
+
 /// Sigmoid focal loss (RetinaNet/SSD style).
 ///
 /// logits:  [N, A, C]  Float
