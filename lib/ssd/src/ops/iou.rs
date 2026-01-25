@@ -39,6 +39,30 @@ pub fn iou_xyxy(a: &[f32; 4], b: &[f32; 4]) -> f32 {
     }
 }
 
+/// Compute IoU matrix between two sets of boxes in [cx, cy, w, h] format.
+/// Returns a Vec<Vec<f32>> of shape [A][G].
+pub fn iou_matrix(
+    anchors: &[[f32; 4]],
+    gt_boxes: &[[f32; 4]],
+) -> Vec<Vec<f32>> {
+    // Convert both sets to xyxy
+    let anchors_xyxy = cxcywh_to_xyxy(anchors);
+    let gt_xyxy = cxcywh_to_xyxy(gt_boxes);
+
+    let num_anchors = anchors_xyxy.len();
+    let num_gt = gt_xyxy.len();
+
+    let mut result = vec![vec![0.0f32; num_gt]; num_anchors];
+
+    for a in 0..num_anchors {
+        for g in 0..num_gt {
+            result[a][g] = iou_xyxy(&anchors_xyxy[a], &gt_xyxy[g]);
+        }
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,5 +110,28 @@ mod tests {
         let a = [0.1, 0.1, 0.4, 0.4];
         let b = [0.2, 0.2, 0.5, 0.5];
         assert!((iou_xyxy(&a, &b) - iou_xyxy(&b, &a)).abs() < 1e-6);
+    }
+
+    #[test]
+    fn test_iou_matrix_basic() {
+        let anchors = vec![
+            [0.5, 0.5, 0.4, 0.4], // overlaps GT
+            [0.1, 0.1, 0.1, 0.1], // no overlap
+        ];
+
+        let gt = vec![
+            [0.5, 0.5, 0.4, 0.4], // identical to anchor 0
+        ];
+
+        let m = iou_matrix(&anchors, &gt);
+
+        assert_eq!(m.len(), 2);
+        assert_eq!(m[0].len(), 1);
+
+        // anchor 0 identical to GT => IoU = 1
+        assert!((m[0][0] - 1.0).abs() < 1e-6);
+
+        // anchor 1 no overlap => IoU = 0
+        assert!(m[1][0] == 0.0);
     }
 }
