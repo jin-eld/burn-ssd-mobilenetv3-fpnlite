@@ -1,4 +1,5 @@
 use burn::{
+    nn::loss::HuberLossConfig,
     tensor::activation::sigmoid,
     tensor::{backend::Backend, Int, Tensor},
 };
@@ -71,6 +72,42 @@ pub fn sigmoid_focal_loss<B: Backend>(
 
     // final focal loss
     return (focal_weight * ce).mean();
+}
+
+/// SSD-style masked Huber (Smooth L1) regression loss.
+///
+/// pred:   [N, A, 4]  predicted box deltas
+/// target: [N, A, 4]  target box deltas
+/// mask:   [N, A]     1 for positive anchors, 0 otherwise
+///
+/// Returns: [1] Float (scalar loss)
+pub fn ssd_regression_loss<B: Backend>(
+    pred: Tensor<B, 3>,
+    target: Tensor<B, 3>,
+    mask: Tensor<B, 2, Int>,
+) -> Tensor<B, 1> {
+    let eps = 1e-6;
+
+    // huber with delta = 1.0 -> classic Smooth L1
+    let huber = HuberLossConfig::new(1.0).init();
+
+    // elementwise Huber loss: [N, A, 4]
+    let per_elem = huber.forward_no_reduction(pred, target);
+
+    // broadcast mask to [N, A, 4]
+    let mask_f: Tensor<B, 3> = mask.clone().float().unsqueeze_dim(2);
+
+    // apply mask
+    let masked = per_elem * mask_f;
+
+    // sum all regression losses → [1]
+    let loss_sum = masked.sum();
+
+    // number of positive anchors → [1]
+    let num_pos = mask.float().sum();
+
+    // normalize, avoid division by zero
+    return loss_sum / (num_pos + eps);
 }
 
 #[cfg(test)]
@@ -278,6 +315,90 @@ mod tests {
         assert!(
             loss_g2 <= loss_g0,
             "gamma should reduce loss for ambiguous predictions"
+        );
+    }
+
+    #[test]
+    fn ssd_reg_zero_when_pred_equals_target() {
+        let device = Default::default();
+
+        let pred =
+            Tensor::<B, 3>::from_floats([[[0.0, 0.0, 0.0, 0.0]]], &device);
+        let target =
+            Tensor::<B, 3>::from_floats([[[0.0, 0.0, 0.0, 0.0]]], &device);
+        let mask = Tensor::<B, 2, Int>::from_ints([[1]], &device);
+
+        let loss = ssd_regression_loss::<B>(pred, target, mask);
+        let value = scalar_value(loss);
+
+        assert!(
+            value < 1e-6,
+            "loss should be ~0 when pred == target, got {}",
+            value
+        );
+    }
+
+    #[test]
+    fn ssd_reg_ignores_negative_anchors() {
+        let device = Default::default();
+
+        let pred =
+            Tensor::<B, 3>::from_floats([[[10.0, -10.0, 5.0, -5.0]]], &device);
+        let target =
+            Tensor::<B, 3>::from_floats([[[0.0, 0.0, 0.0, 0.0]]], &device);
+        let mask = Tensor::<B, 2, Int>::from_ints([[0]], &device);
+
+        let loss = ssd_regression_loss::<B>(pred, target, mask);
+        let value = scalar_value(loss);
+
+        assert!(
+            value < 1e-6,
+            "loss should be ~0 when mask is zero, got {}",
+            value
+        );
+    }
+
+    #[test]
+    fn ssd_reg_behaves_reasonably_for_small_errors() {
+        let device = Default::default();
+
+        let pred =
+            Tensor::<B, 3>::from_floats([[[0.1, -0.2, 0.3, -0.4]]], &device);
+        let target = Tensor::<B, 3>::zeros([1, 1, 4], &device);
+        let mask = Tensor::<B, 2, Int>::from_ints([[1]], &device);
+
+        let loss = scalar_value(ssd_regression_loss::<B>(pred, target, mask));
+
+        assert!(
+            loss > 0.0 && loss < 1.0,
+            "loss should be small and positive, got {}",
+            loss
+        );
+    }
+
+    #[test]
+    fn ssd_reg_handles_batches_and_anchors() {
+        let device = Default::default();
+
+        let pred = Tensor::<B, 3>::from_floats(
+            [
+                [[0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 1.0, 1.0]],
+                [[-1.0, -1.0, -1.0, -1.0], [2.0, 2.0, 2.0, 2.0]],
+            ],
+            &device,
+        ); // [2,2,4]
+
+        let target = Tensor::<B, 3>::zeros([2, 2, 4], &device);
+
+        let mask = Tensor::<B, 2, Int>::from_ints([[1, 0], [1, 1]], &device); // [2,2]
+
+        let loss = ssd_regression_loss::<B>(pred, target, mask);
+        let value = scalar_value(loss);
+
+        assert!(value.is_finite(), "loss must be finite");
+        assert!(
+            value > 0.0,
+            "loss should be positive when some anchors are active"
         );
     }
 }
