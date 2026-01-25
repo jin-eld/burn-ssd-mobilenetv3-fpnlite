@@ -80,6 +80,58 @@ pub fn tensor_to_img<B: Backend>(
     return image_buffer;
 }
 
+pub fn coco_to_cxcywh_normalized(
+    boxes: &[[f32; 4]],
+    img_w: f32,
+    img_h: f32,
+) -> Vec<[f32; 4]> {
+    return boxes
+        .iter()
+        .map(|b| {
+            let x = b[0];
+            let y = b[1];
+            let w = b[2];
+            let h = b[3];
+
+            [
+                (x + w / 2.0) / img_w,
+                (y + h / 2.0) / img_h,
+                w / img_w,
+                h / img_h,
+            ]
+        })
+        .collect();
+}
+
+pub fn scale_coco_boxes(
+    boxes: &mut Vec<[f32; 4]>,
+    orig_w: f32,
+    orig_h: f32,
+    new_w: f32,
+    new_h: f32,
+) {
+    let scale_x = new_w / orig_w;
+    let scale_y = new_h / orig_h;
+
+    for b in boxes.iter_mut() {
+        b[0] *= scale_x;
+        b[1] *= scale_y;
+        b[2] *= scale_x;
+        b[3] *= scale_y;
+    }
+}
+
+pub fn img_resize_ssd(
+    img: &DynamicImage,
+    target_w: u32,
+    target_h: u32,
+) -> DynamicImage {
+    return img
+        .resize_exact(target_w, target_h, FilterType::Triangle)
+        .to_rgb8()
+        .into();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +184,39 @@ mod tests {
         let output = img_resize_and_center_crop(&img, target_size);
 
         assert_eq!(output.dimensions(), (target_size, target_size));
+    }
+
+    #[test]
+    fn test_img_resize_ssd() {
+        let img = DynamicImage::ImageRgb8(ImageBuffer::from_pixel(
+            100,
+            200,
+            Rgb([10, 20, 30]),
+        ));
+        let resized = img_resize_ssd(&img, 320, 320);
+
+        assert_eq!(resized.dimensions(), (320, 320));
+    }
+
+    #[test]
+    fn test_scale_coco_boxes() {
+        let mut boxes = vec![[10.0, 20.0, 30.0, 40.0]];
+        scale_coco_boxes(&mut boxes, 100.0, 200.0, 200.0, 400.0);
+
+        assert_eq!(boxes[0], [20.0, 40.0, 60.0, 80.0]);
+    }
+
+    #[test]
+    fn test_coco_to_cxcywh_normalized() {
+        let boxes = vec![[10.0, 20.0, 30.0, 40.0]];
+        let out = coco_to_cxcywh_normalized(&boxes, 100.0, 200.0);
+
+        let cx = (10.0 + 15.0) / 100.0;
+        let cy = (20.0 + 20.0) / 200.0;
+
+        assert!((out[0][0] - cx).abs() < 1e-6);
+        assert!((out[0][1] - cy).abs() < 1e-6);
+        assert!((out[0][2] - 0.3).abs() < 1e-6);
+        assert!((out[0][3] - 0.2).abs() < 1e-6);
     }
 }
