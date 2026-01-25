@@ -4,6 +4,7 @@ members = [
     "lib/fpnlite",
     "lib/ssd",
     "lib/transforms",
+    "lib/training",
     "bin/mobilenetv3-cli"
 ]
 
