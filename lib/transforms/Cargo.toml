@@ -8,6 +8,4 @@ publish.workspace = true
 
 [dependencies]
 burn.workspace = true
-
-image = { version = "0.25.5", features = [ "png", "jpeg" ] }
-
+image.workspace = true

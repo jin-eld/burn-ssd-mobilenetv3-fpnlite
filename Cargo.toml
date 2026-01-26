@@ -21,6 +21,7 @@ publish = false
 [workspace.dependencies]
 burn = { version = "0.20", features = ["train", "wgpu"] }
 burn-import = "0.20"
+burn-dataset = { version = "0.20", features = ["vision"] }
 image = { version = "0.25.5", features = [ "png", "jpeg" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -28,3 +29,4 @@ serde_json = "1.0"
 fpnlite = { path = "lib/fpnlite" }
 mobilenetv3 = { path = "lib/mobilenetv3" }
 ssd = { path = "lib/ssd" }
+transforms = { path = "lib/transforms" }
