@@ -1,3 +1,8 @@
 Cargo.lock
 *.swp
 __pycache__
+lib/fpnlite/target
+lib/ssd/target
+lib/mobilenetv3/target
+lib/training/target
+/target/
