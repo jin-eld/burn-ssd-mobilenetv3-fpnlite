@@ -1,5 +1,5 @@
+pub mod ssd_batcher;
 pub mod ssd_dataset;
-//pub mod collate;
 
+pub use ssd_batcher::{SSDBatch, SSDBatcher};
 pub use ssd_dataset::{SSDDataset, SSDSample};
-//pub use collate::ssd_collate;
