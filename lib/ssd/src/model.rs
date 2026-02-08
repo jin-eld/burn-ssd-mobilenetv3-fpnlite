@@ -162,6 +162,40 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
             self.max_detections,
         );
     }
+
+    /// Training helper Generate anchors for a given input size by running a
+    /// dummy forward pass through the backbone + FPN to obtain the true
+    /// feature map sizes.
+    ///
+    /// This guarantees that anchors match the SSDLite head exactly.
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn generate_anchors_for_input(
+        &self,
+        input_h: usize,
+        input_w: usize,
+        device: &B::Device,
+    ) -> Vec<[f32; 4]> {
+        // 1. Dummy input
+        let dummy = Tensor::<B, 4>::zeros([1, 3, input_h, input_w], device);
+
+        // 2. Backbone → C3, C4
+        let (c3, c4) = self.model.backbone.forward_features(dummy);
+
+        // 3. FPN → P3–P6
+        let feats = self.model.fpn.forward(c3, c4);
+
+        // 4. Extract feature map sizes
+        let feature_map_sizes: Vec<(usize, usize)> = feats
+            .iter()
+            .map(|f| {
+                let d = f.dims();
+                (d[2], d[3]) // (H, W)
+            })
+            .collect();
+
+        // 5. Generate anchors using the model’s AnchorGenerator
+        self.anchors.generate(&feature_map_sizes)
+    }
 }
 
 #[cfg(test)]
