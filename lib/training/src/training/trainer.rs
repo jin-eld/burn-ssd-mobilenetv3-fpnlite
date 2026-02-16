@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
 use burn::{
-    data::dataloader::{DataLoader, DataLoaderBuilder},
+    data::dataloader::DataLoaderBuilder,
     module::Ignored,
     optim::AdamConfig,
     record::CompactRecorder,
@@ -9,7 +7,7 @@ use burn::{
     train::{Learner, SupervisedTraining},
 };
 
-use crate::dataset::{SSDBatch, SSDBatcher, SSDDataset};
+use crate::dataset::{SSDBatcher, SSDDataset};
 use crate::loss::SSDLoss;
 use crate::target::{matcher::Matcher, target_encoder::SSDTargetEncoder};
 use crate::training::ssd_train_step::SSDTrainModel;
@@ -22,13 +20,10 @@ pub fn train<B: AutodiffBackend>(
     coco_images: &str,
     device: B::Device,
 ) {
-    // ---------------------------------------------------------
-    // 1. Load datasets (train + valid)
-    // ---------------------------------------------------------
     let input_w = 320;
     let input_h = 320;
 
-    // ImageFolderDataset is not Clone, so build it twice
+    // ImageFolderDataset is not Clone, need to build it twice
     let inner_train =
         burn::data::dataset::vision::ImageFolderDataset::new_coco_detection(
             coco_json,
@@ -43,12 +38,10 @@ pub fn train<B: AutodiffBackend>(
         )
         .expect("Failed to load COCO dataset (valid)");
 
-    // Devices
     let device_train = device.clone();
     let device_valid =
         <<B as AutodiffBackend>::InnerBackend as Backend>::Device::default();
 
-    // Datasets
     let dataset_train =
         SSDDataset::<B>::new(inner_train, input_w, input_h, device_train);
 
@@ -61,11 +54,6 @@ pub fn train<B: AutodiffBackend>(
 
     let num_classes = dataset_train.num_classes();
 
-    // ---------------------------------------------------------
-    // 2. Build dataloaders
-    //    - train: backend B, batch SSDBatch<B>
-    //    - valid: backend InnerBackend, batch SSDBatch<InnerBackend>
-    // ---------------------------------------------------------
     let batcher_train = SSDBatcher::new();
     let batcher_valid = SSDBatcher::new();
 
@@ -79,18 +67,12 @@ pub fn train<B: AutodiffBackend>(
         .shuffle(1337)
         .build(dataset_valid);
 
-    // ---------------------------------------------------------
-    // 3. Build model
-    // ---------------------------------------------------------
     let model = SSDLiteMobileNetV3::<B>::new(
         MobileNetV3Arch::Large,
         num_classes,
         &device,
     );
 
-    // ---------------------------------------------------------
-    // 4. Build training wrapper
-    // ---------------------------------------------------------
     let matcher = Matcher::new(0.5, 0.4);
     let encoder = SSDTargetEncoder::new(matcher);
     let loss_fn = SSDLoss::new(1.0, 1.0);
@@ -105,25 +87,13 @@ pub fn train<B: AutodiffBackend>(
         device: Ignored(device.clone()),
     };
 
-    // ---------------------------------------------------------
-    // 5. Optimizer
-    // ---------------------------------------------------------
     let optim = AdamConfig::new().init::<B, SSDTrainModel<B>>();
 
-    // ---------------------------------------------------------
-    // 6. Recorder (checkpoints)
-    // ---------------------------------------------------------
     let recorder = CompactRecorder::new();
 
-    // ---------------------------------------------------------
-    // 7. Build learner (constant LR scheduler = f64)
-    // ---------------------------------------------------------
     let lr: f64 = 1e-4;
     let learner = Learner::new(train_model, optim, lr);
 
-    // ---------------------------------------------------------
-    // 8. Run training
-    // ---------------------------------------------------------
     let training = SupervisedTraining::new(
         "runs/ssd-experiment",
         train_loader,

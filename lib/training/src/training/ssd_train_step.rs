@@ -6,7 +6,6 @@ use crate::training::ssd_output::SSDOutput;
 use burn::module::{Ignored, Module};
 use burn::optim::GradientsParams;
 use burn::tensor::backend::{AutodiffBackend, Backend};
-use burn::tensor::{DType, Shape, TensorData};
 use burn::train::{InferenceStep, TrainOutput, TrainStep};
 use burn::Tensor;
 
@@ -14,11 +13,11 @@ use ssd::model::SSDLiteMobileNetV3;
 
 #[derive(Module, Debug)]
 pub struct SSDTrainModel<B: Backend> {
-    pub model: SSDLiteMobileNetV3<B>,    // trainable
-    pub anchors: Ignored<Vec<[f32; 4]>>, // ignored
-    pub encoder: Ignored<SSDTargetEncoder>, // ignored
-    pub loss_fn: Ignored<SSDLoss>,       // ignored
-    pub device: Ignored<B::Device>,      // ignored
+    pub model: SSDLiteMobileNetV3<B>,
+    pub anchors: Ignored<Vec<[f32; 4]>>,
+    pub encoder: Ignored<SSDTargetEncoder>,
+    pub loss_fn: Ignored<SSDLoss>,
+    pub device: Ignored<B::Device>,
 }
 
 pub trait SSDTraining<B: Backend> {
@@ -41,16 +40,10 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
         loss_fn: &SSDLoss,
         device: &B::Device,
     ) -> SSDOutput<B> {
-        // 1. Raw head outputs: logits + deltas
+        // raw head outputs: logits + deltas
         let (pred_logits, pred_deltas) = self.forward_raw(batch.images);
 
-        let pred_dims = pred_deltas.dims();
-        let num_pred_anchors = pred_dims[1];
-
-        println!("pred_deltas dims = {:?}", pred_dims);
-        println!("anchors.len()    = {}", anchors.len());
-
-        // 2. Decode deltas → boxes using training anchors
+        // decode deltas -> boxes using training anchors
         let anchors_tensor = anchors_to_tensor::<B>(anchors, device);
 
         let pred_boxes = self
@@ -60,7 +53,7 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
         let pred_boxes =
             Tensor::<B, 3>::from_data(pred_boxes.to_data(), device);
 
-        // 3. Encode targets
+        // encode targets
         let (tgt_classes, tgt_boxes, pos_mask) = encoder.encode_batch::<B>(
             anchors,
             batch.boxes,
@@ -68,7 +61,7 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
             device,
         );
 
-        // 4. Compute loss on decoded boxes
+        // compute loss on decoded boxes
         let (loss_total, loss_cls, loss_reg) = loss_fn.forward(
             pred_logits.clone(),
             pred_boxes.clone(),
@@ -77,7 +70,7 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
             pos_mask.clone(),
         );
 
-        SSDOutput::new(
+        return SSDOutput::new(
             loss_total,
             loss_cls,
             loss_reg,
@@ -86,7 +79,7 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
             tgt_classes,
             tgt_boxes,
             pos_mask,
-        )
+        );
     }
 }
 
@@ -106,12 +99,10 @@ where
             &self.device.0,
         );
 
-        // Backend-specific gradients
         let raw_grads = out.loss.backward();
-
         let grads = GradientsParams::from_grads::<B, _>(raw_grads, self);
 
-        TrainOutput { grads, item: out }
+        return TrainOutput { grads, item: out };
     }
 }
 
@@ -123,13 +114,13 @@ where
     type Output = SSDOutput<B>;
 
     fn step(&self, batch: Self::Input) -> Self::Output {
-        self.model.forward_training(
+        return self.model.forward_training(
             batch,
             &self.anchors.0,
             &self.encoder.0,
             &self.loss_fn.0,
             &self.device.0,
-        )
+        );
     }
 }
 
@@ -139,7 +130,7 @@ pub fn anchors_to_tensor<B: Backend>(
 ) -> Tensor<B, 2> {
     let num = anchors.len();
 
-    // Flatten into Vec<f32>
+    // flatten into Vec<f32>
     let mut flat = Vec::with_capacity(num * 4);
     for a in anchors {
         flat.extend_from_slice(a);
@@ -148,6 +139,6 @@ pub fn anchors_to_tensor<B: Backend>(
     // 1D tensor from &[f32]
     let t1 = Tensor::<B, 1>::from_floats(flat.as_slice(), device);
 
-    // Reshape to [num_anchors, 4]
-    t1.reshape([num, 4])
+    // reshape to [num_anchors, 4]
+    return t1.reshape([num, 4]);
 }

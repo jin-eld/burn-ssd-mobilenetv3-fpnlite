@@ -5,7 +5,7 @@ impl<B: Backend> ItemLazy for SSDOutput<B> {
     type ItemSync = Self;
 
     fn sync(self) -> Self::ItemSync {
-        self
+        return self;
     }
 }
 
@@ -31,7 +31,7 @@ impl<B: Backend> SSDOutput<B> {
         tgt_boxes: Tensor<B, 3>,
         pos_mask: Tensor<B, 2, Int>,
     ) -> Self {
-        Self {
+        return Self {
             loss,
             loss_cls,
             loss_reg,
@@ -40,7 +40,7 @@ impl<B: Backend> SSDOutput<B> {
             tgt_classes,
             tgt_boxes,
             pos_mask,
-        }
+        };
     }
 }
 

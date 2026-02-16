@@ -1,6 +1,7 @@
 pub mod dataset;
 pub mod loss;
 pub mod target;
+pub mod training;
 
 #[cfg(test)]
 mod tests {

@@ -10,10 +10,10 @@ publish.workspace = true
 burn.workspace = true
 burn-dataset.workspace = true
 image.workspace = true
+mobilenetv3.workspace = true
 ssd.workspace = true
 transforms.workspace = true
 
 [dev-dependencies]
 ssd = { path = "../ssd", features = ["test-utils"] }
-mobilenetv3.workspace = true
 
