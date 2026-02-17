@@ -1,7 +1,4 @@
-use burn::{
-    tensor::backend::Backend,
-    tensor::{Int, Tensor},
-};
+use burn::tensor::Tensor;
 
 #[derive(Debug, Clone)]
 pub struct DecodeConfig {
@@ -38,35 +35,28 @@ impl BoxDecoder {
     /// - `bbox_deltas`: [N, A, 4] (tx, ty, tw, th)
     /// - `anchors`:     [A, 4]    (cx, cy, w, h) in normalized coords
     /// - returns:       [N, A, 4] (cx, cy, w, h) in normalized coords
-    pub fn decode<B: Backend>(
+    pub fn decode(
         &self,
-        bbox_deltas: Tensor<B, 3>, // [N, A, 4]
-        anchors: Tensor<B, 2>,     // [A, 4]
-    ) -> Tensor<B, 3> {
+        bbox_deltas: Tensor<3>, // [N, A, 4]
+        anchors: Tensor<2>,     // [A, 4]
+    ) -> Tensor<3> {
         let center_var = self.cfg.center_variance;
         let size_var = self.cfg.size_variance;
 
         // anchors: [A,4] -> [1,A,4]
-        let anchors: Tensor<B, 3> = anchors.unsqueeze_dim(0);
-
-        let device = bbox_deltas.device();
-
-        let idx0 = Tensor::<B, 1, Int>::from_data([0], &device);
-        let idx1 = Tensor::<B, 1, Int>::from_data([1], &device);
-        let idx2 = Tensor::<B, 1, Int>::from_data([2], &device);
-        let idx3 = Tensor::<B, 1, Int>::from_data([3], &device);
+        let anchors: Tensor<3> = anchors.unsqueeze_dim(0);
 
         // deltas [N,A,4] -> [N,A,1]
-        let tx = bbox_deltas.clone().select(2, idx0.clone());
-        let ty = bbox_deltas.clone().select(2, idx1.clone());
-        let tw = bbox_deltas.clone().select(2, idx2.clone());
-        let th = bbox_deltas.clone().select(2, idx3.clone());
+        let tx = bbox_deltas.clone().narrow(2, 0, 1);
+        let ty = bbox_deltas.clone().narrow(2, 1, 1);
+        let tw = bbox_deltas.clone().narrow(2, 2, 1);
+        let th = bbox_deltas.clone().narrow(2, 3, 1);
 
         // anchors [1,A,4] -> [1,A,1]
-        let cx = anchors.clone().select(2, idx0.clone());
-        let cy = anchors.clone().select(2, idx1.clone());
-        let wa = anchors.clone().select(2, idx2.clone());
-        let ha = anchors.clone().select(2, idx3.clone());
+        let cx = anchors.clone().narrow(2, 0, 1);
+        let cy = anchors.clone().narrow(2, 1, 1);
+        let wa = anchors.clone().narrow(2, 2, 1);
+        let ha = anchors.clone().narrow(2, 3, 1);
 
         // SSD decode
         let cx_dec = tx.mul_scalar(center_var).mul(wa.clone()).add(cx.clone());
@@ -88,21 +78,14 @@ impl BoxDecoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::{Wgpu, WgpuDevice};
-    use burn::tensor::Tensor;
-
-    type B = Wgpu;
-
-    fn device() -> WgpuDevice {
-        WgpuDevice::default()
-    }
+    use burn::tensor::{Device, Tensor};
 
     #[test]
     fn test_decode_shapes() {
-        let device = device();
+        let device = Device::default();
 
         // bbox_deltas: [2, 3, 4]
-        let deltas = Tensor::<B, 3>::from_floats(
+        let deltas = Tensor::<3>::from_floats(
             [
                 [
                     [0.1, 0.2, 0.3, 0.4],
@@ -119,7 +102,7 @@ mod tests {
         );
 
         // anchors: [3, 4]
-        let anchors = Tensor::<B, 2>::from_floats(
+        let anchors = Tensor::<2>::from_floats(
             [
                 [0.5, 0.5, 0.2, 0.2],
                 [0.3, 0.3, 0.1, 0.1],
@@ -129,25 +112,24 @@ mod tests {
         );
 
         let decoder = BoxDecoder::new(DecodeConfig::default());
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
 
         assert_eq!(out.dims(), [2, 3, 4]);
     }
 
     #[test]
     fn test_decode_math_simple_case() {
-        let device = device();
+        let device = Device::default();
 
         // deltas: [1,1,4]
         let deltas =
-            Tensor::<B, 3>::from_floats([[[0.0, 0.0, 0.0, 0.0]]], &device);
+            Tensor::<3>::from_floats([[[0.0, 0.0, 0.0, 0.0]]], &device);
 
         // anchors: [1,4]
-        let anchors =
-            Tensor::<B, 2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
+        let anchors = Tensor::<2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
 
         let decoder = BoxDecoder::new(DecodeConfig::default());
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
 
         // Extract values as Vec<f32>
         let values = out.into_data().to_vec::<f32>().unwrap();
@@ -160,15 +142,15 @@ mod tests {
 
     #[test]
     fn test_decode_nonzero_deltas() {
-        let device = device();
+        let device = Device::default();
 
         // One batch, one anchor
-        let deltas = Tensor::<B, 3>::from_floats(
+        let deltas = Tensor::<3>::from_floats(
             [[[0.2, -0.1, 0.5, -0.3]]], // tx, ty, tw, th
             &device,
         );
 
-        let anchors = Tensor::<B, 2>::from_floats(
+        let anchors = Tensor::<2>::from_floats(
             [[0.4, 0.6, 0.2, 0.1]], // cx, cy, w, h
             &device,
         );
@@ -176,7 +158,7 @@ mod tests {
         let cfg = DecodeConfig::default();
         let decoder = BoxDecoder::new(cfg);
 
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
         let v = out.into_data().to_vec::<f32>().unwrap();
 
         // Expected math:
@@ -198,14 +180,13 @@ mod tests {
 
     #[test]
     fn test_decode_clipping() {
-        let device = device();
+        let device = Device::default();
 
         // tx = 50 pushes cx far beyond 1.0
         let deltas =
-            Tensor::<B, 3>::from_floats([[[50.0, 50.0, 0.0, 0.0]]], &device);
+            Tensor::<3>::from_floats([[[50.0, 50.0, 0.0, 0.0]]], &device);
 
-        let anchors =
-            Tensor::<B, 2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
+        let anchors = Tensor::<2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
 
         let cfg = DecodeConfig {
             clip: true,
@@ -213,7 +194,7 @@ mod tests {
         };
         let decoder = BoxDecoder::new(cfg);
 
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
         let v = out.into_data().to_vec::<f32>().unwrap();
 
         assert!((v[0] - 1.0).abs() < 1e-6); // cx clipped
@@ -222,10 +203,10 @@ mod tests {
 
     #[test]
     fn test_decode_multi_batch_multi_anchor() {
-        let device = device();
+        let device = Device::default();
 
         // 2 batches, 3 anchors
-        let deltas = Tensor::<B, 3>::from_floats(
+        let deltas = Tensor::<3>::from_floats(
             [
                 [
                     [0.1, 0.0, 0.0, 0.0],
@@ -241,7 +222,7 @@ mod tests {
             &device,
         );
 
-        let anchors = Tensor::<B, 2>::from_floats(
+        let anchors = Tensor::<2>::from_floats(
             [
                 [0.1, 0.1, 0.1, 0.1],
                 [0.2, 0.2, 0.2, 0.2],
@@ -251,7 +232,7 @@ mod tests {
         );
 
         let decoder = BoxDecoder::new(DecodeConfig::default());
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
 
         assert_eq!(out.dims(), [2, 3, 4]);
 
@@ -265,14 +246,13 @@ mod tests {
 
     #[test]
     fn test_decode_clipping_negative() {
-        let device = device();
+        let device = Device::default();
 
         // tx = -50 pushes cx far below 0
         let deltas =
-            Tensor::<B, 3>::from_floats([[[-50.0, -50.0, 0.0, 0.0]]], &device);
+            Tensor::<3>::from_floats([[[-50.0, -50.0, 0.0, 0.0]]], &device);
 
-        let anchors =
-            Tensor::<B, 2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
+        let anchors = Tensor::<2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
 
         let cfg = DecodeConfig {
             clip: true,
@@ -280,7 +260,7 @@ mod tests {
         };
         let decoder = BoxDecoder::new(cfg);
 
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
         let v = out.into_data().to_vec::<f32>().unwrap();
 
         assert!((v[0] - 0.0).abs() < 1e-6); // cx clipped
@@ -289,14 +269,13 @@ mod tests {
 
     #[test]
     fn test_decode_clipping_mixed() {
-        let device = device();
+        let device = Device::default();
 
         // tx pushes cx > 1, ty keeps cy inside [0,1]
         let deltas =
-            Tensor::<B, 3>::from_floats([[[50.0, 0.0, 0.0, 0.0]]], &device);
+            Tensor::<3>::from_floats([[[50.0, 0.0, 0.0, 0.0]]], &device);
 
-        let anchors =
-            Tensor::<B, 2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
+        let anchors = Tensor::<2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
 
         let cfg = DecodeConfig {
             clip: true,
@@ -304,7 +283,7 @@ mod tests {
         };
         let decoder = BoxDecoder::new(cfg);
 
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
         let v = out.into_data().to_vec::<f32>().unwrap();
 
         assert!((v[0] - 1.0).abs() < 1e-6); // cx clipped
@@ -313,14 +292,13 @@ mod tests {
 
     #[test]
     fn test_decode_clipping_sizes() {
-        let device = device();
+        let device = Device::default();
 
         // tw/th large enough to blow up w/h
         let deltas =
-            Tensor::<B, 3>::from_floats([[[0.0, 0.0, 20.0, 20.0]]], &device);
+            Tensor::<3>::from_floats([[[0.0, 0.0, 20.0, 20.0]]], &device);
 
-        let anchors =
-            Tensor::<B, 2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
+        let anchors = Tensor::<2>::from_floats([[0.5, 0.5, 0.2, 0.2]], &device);
 
         let cfg = DecodeConfig {
             clip: true,
@@ -328,7 +306,7 @@ mod tests {
         };
         let decoder = BoxDecoder::new(cfg);
 
-        let out = decoder.decode::<B>(deltas, anchors);
+        let out = decoder.decode(deltas, anchors);
         let v = out.into_data().to_vec::<f32>().unwrap();
 
         assert!((v[2] - 1.0).abs() < 1e-6); // w clipped

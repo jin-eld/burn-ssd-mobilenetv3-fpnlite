@@ -1,11 +1,11 @@
 use burn::data::dataloader::batcher::Batcher;
-use burn::tensor::{backend::Backend, Tensor};
+use burn::tensor::{Device, Tensor};
 
 use super::ssd_dataset::SSDSample;
 
 #[derive(Clone, Debug)]
-pub struct SSDBatch<B: Backend> {
-    pub images: Tensor<B, 4>,      // [batch, C, H, W]
+pub struct SSDBatch {
+    pub images: Tensor<4>,         // [batch, C, H, W]
     pub boxes: Vec<Vec<[f32; 4]>>, // per-image boxes
     pub labels: Vec<Vec<usize>>,   // per-image labels
 }
@@ -19,14 +19,10 @@ impl SSDBatcher {
     }
 }
 
-impl<B: Backend> Batcher<B, SSDSample<B>, SSDBatch<B>> for SSDBatcher {
-    fn batch(
-        &self,
-        items: Vec<SSDSample<B>>,
-        device: &B::Device,
-    ) -> SSDBatch<B> {
+impl Batcher<SSDSample, SSDBatch> for SSDBatcher {
+    fn batch(&self, items: Vec<SSDSample>, device: &Device) -> SSDBatch {
         // move images to device and collect them
-        let images: Vec<Tensor<B, 3>> = items
+        let images: Vec<Tensor<3>> = items
             .iter()
             .map(|s| s.image.clone().to_device(device))
             .collect();
@@ -52,24 +48,21 @@ impl<B: Backend> Batcher<B, SSDSample<B>, SSDBatch<B>> for SSDBatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::Wgpu;
-    use burn::tensor::{backend::Backend, Tensor};
-
-    type B = Wgpu;
+    use burn::tensor::{Device, Tensor};
 
     #[test]
     fn test_ssd_batcher_basic() {
-        let device = <B as Backend>::Device::default();
+        let device = Device::default();
 
         // two synthetic samples
         let sample1 = SSDSample {
-            image: Tensor::<B, 3>::zeros([3, 320, 320], &device),
+            image: Tensor::<3>::zeros([3, 320, 320], &device),
             boxes: vec![[0.1, 0.2, 0.3, 0.4]],
             labels: vec![1],
         };
 
         let sample2 = SSDSample {
-            image: Tensor::<B, 3>::zeros([3, 320, 320], &device),
+            image: Tensor::<3>::zeros([3, 320, 320], &device),
             boxes: vec![[0.5, 0.6, 0.7, 0.8]],
             labels: vec![0],
         };
@@ -93,10 +86,10 @@ mod tests {
 
     #[test]
     fn test_ssd_batcher_empty_annotations() {
-        let device = <B as Backend>::Device::default();
+        let device = Device::default();
 
         let sample = SSDSample {
-            image: Tensor::<B, 3>::zeros([3, 320, 320], &device),
+            image: Tensor::<3>::zeros([3, 320, 320], &device),
             boxes: vec![],
             labels: vec![],
         };

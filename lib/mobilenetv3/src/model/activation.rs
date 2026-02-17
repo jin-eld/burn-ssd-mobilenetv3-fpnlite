@@ -1,16 +1,13 @@
 use super::identity::{Identity, IdentityConfig};
-use burn::{
-    module::Module,
-    nn::Relu,
-    tensor::{backend::Backend, Tensor},
-};
+use burn::{module::Module, nn::Relu, tensor::Tensor};
+
 use serde::{
     de::{self, Visitor},
     Deserialize, Deserializer, Serialize, Serializer,
 };
 use std::fmt;
 
-#[derive(Module, Debug, Clone, Default)]
+#[derive(Module, Debug, Default)]
 pub struct Relu6 {
     relu: Relu,
 }
@@ -20,15 +17,12 @@ impl Relu6 {
         return Self { relu: Relu::new() };
     }
 
-    pub fn forward<B: Backend, const D: usize>(
-        &self,
-        input: Tensor<B, D>,
-    ) -> Tensor<B, D> {
+    pub fn forward<const D: usize>(&self, input: Tensor<D>) -> Tensor<D> {
         return input.clamp(0.0, 6.0);
     }
 }
 
-#[derive(Module, Debug, Clone, Default)]
+#[derive(Module, Debug, Default)]
 pub struct Hardswish {
     relu6: Relu6,
 }
@@ -40,17 +34,14 @@ impl Hardswish {
         };
     }
 
-    pub fn forward<B: Backend, const D: usize>(
-        &self,
-        input: Tensor<B, D>,
-    ) -> Tensor<B, D> {
+    pub fn forward<const D: usize>(&self, input: Tensor<D>) -> Tensor<D> {
         // Hardswish: x * ReLU6(x + 3) / 6
         let x = self.relu6.forward(input.clone().add_scalar(3.0));
         return input.mul(x).div_scalar(6.0);
     }
 }
 
-#[derive(Module, Clone, Debug)]
+#[derive(Module, Debug)]
 pub enum Activation {
     Relu(Relu),
     Identity(Identity),
@@ -59,10 +50,7 @@ pub enum Activation {
 }
 
 impl Activation {
-    pub fn forward<B: Backend, const D: usize>(
-        &self,
-        input: Tensor<B, D>,
-    ) -> Tensor<B, D> {
+    pub fn forward<const D: usize>(&self, input: Tensor<D>) -> Tensor<D> {
         match self {
             Activation::Relu(layer) => layer.forward(input),
             Activation::Identity(layer) => layer.forward(input),

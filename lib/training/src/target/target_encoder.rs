@@ -1,5 +1,5 @@
 use crate::target::matcher::Matcher;
-use burn::tensor::{backend::Backend, DType, Int, Tensor, TensorData};
+use burn::tensor::{DType, Device, Int, Tensor, TensorData};
 
 #[derive(Clone, Debug)]
 pub struct SSDTargetEncoder {
@@ -11,13 +11,13 @@ impl SSDTargetEncoder {
         return Self { matcher };
     }
 
-    pub fn encode_batch<B: Backend>(
+    pub fn encode_batch(
         &self,
         anchors: &[[f32; 4]],
         batch_gt_boxes: Vec<Vec<[f32; 4]>>,
         batch_gt_labels: Vec<Vec<usize>>,
-        device: &B::Device,
-    ) -> (Tensor<B, 2, Int>, Tensor<B, 3>, Tensor<B, 2, Int>) {
+        device: &Device,
+    ) -> (Tensor<2, Int>, Tensor<3>, Tensor<2, Int>) {
         let batch_size = batch_gt_boxes.len();
         let num_anchors = anchors.len();
 
@@ -63,9 +63,9 @@ impl SSDTargetEncoder {
             DType::F32,
         );
 
-        let tgt_classes = Tensor::<B, 2, Int>::from_data(labels_data, device);
-        let pos_mask = Tensor::<B, 2, Int>::from_data(pos_mask_data, device);
-        let tgt_boxes = Tensor::<B, 3>::from_data(boxes_data, device);
+        let tgt_classes = Tensor::<2, Int>::from_data(labels_data, device);
+        let pos_mask = Tensor::<2, Int>::from_data(pos_mask_data, device);
+        let tgt_boxes = Tensor::<3>::from_data(boxes_data, device);
 
         return (tgt_classes, tgt_boxes, pos_mask);
     }
@@ -74,26 +74,23 @@ impl SSDTargetEncoder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::Wgpu;
     use burn::tensor::{Int, Tensor};
 
-    type B = Wgpu;
-
-    fn to_vec_i32(t: &Tensor<B, 2, Int>) -> Vec<Vec<i32>> {
+    fn to_vec_i32(t: &Tensor<2, Int>) -> Vec<Vec<i32>> {
         let data = t.to_data();
         let flat = data.to_vec::<i32>().unwrap();
         let shape = t.shape();
-        let cols = shape.dims[1];
+        let cols = shape.as_slice()[1];
 
         flat.chunks(cols).map(|c| c.to_vec()).collect()
     }
 
-    fn to_vec_f32_3d(t: &Tensor<B, 3>) -> Vec<Vec<[f32; 4]>> {
+    fn to_vec_f32_3d(t: &Tensor<3>) -> Vec<Vec<[f32; 4]>> {
         let data = t.to_data();
         let flat = data.to_vec::<f32>().unwrap();
         let shape = t.shape();
-        let batch = shape.dims[0];
-        let anchors = shape.dims[1];
+        let batch = shape.as_slice()[0];
+        let anchors = shape.as_slice()[1];
 
         let mut out = Vec::new();
         let mut idx = 0;
@@ -123,7 +120,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);
@@ -151,7 +148,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);
@@ -182,7 +179,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, _tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);
@@ -219,7 +216,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);
@@ -250,7 +247,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, _tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);
@@ -276,7 +273,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (_tgt_classes, tgt_boxes, _pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let boxes = to_vec_f32_3d(&tgt_boxes);
         let e = boxes[0][0];
@@ -310,7 +307,7 @@ mod tests {
         let encoder = SSDTargetEncoder::new(matcher);
 
         let (tgt_classes, _tgt_boxes, pos_mask) =
-            encoder.encode_batch::<B>(&anchors, gt_boxes, gt_labels, &device);
+            encoder.encode_batch(&anchors, gt_boxes, gt_labels, &device);
 
         let classes = to_vec_i32(&tgt_classes);
         let mask = to_vec_i32(&pos_mask);

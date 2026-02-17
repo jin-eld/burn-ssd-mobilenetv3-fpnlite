@@ -1,8 +1,6 @@
-use burn::backend::wgpu::Wgpu;
-use burn::backend::Autodiff;
 use burn::data::dataloader::DataLoaderBuilder;
 use burn::data::dataset::vision::ImageFolderDataset;
-use burn::tensor::backend::Backend;
+use burn::tensor::Device;
 use burn::train::TrainStep;
 
 use training::dataset::{SSDBatcher, SSDDataset};
@@ -16,9 +14,7 @@ use ssd::model::SSDLiteMobileNetV3;
 
 #[test]
 fn test_ssd_full_pipeline() {
-    type B = Wgpu;
-
-    let device = <B as Backend>::Device::default();
+    let device = Device::default();
 
     // load tiny COCO dataset, copied from Burn's ImageFolderDataset tests
     let coco = ImageFolderDataset::new_coco_detection(
@@ -27,7 +23,7 @@ fn test_ssd_full_pipeline() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::<B>::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
     let num_classes = dataset.num_classes();
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
@@ -38,13 +34,13 @@ fn test_ssd_full_pipeline() {
 
     // pull one batch
     let mut iter = loader.iter();
-    let batch = iter.next().expect("expected at least one batch");
+    let batch = iter
+        .next()
+        .expect("expected at least one batch")
+        .expect("expected batch loading to succeed");
 
-    let model = SSDLiteMobileNetV3::<B>::new(
-        MobileNetV3Arch::Large,
-        num_classes,
-        &device,
-    );
+    let model =
+        SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, num_classes, &device);
 
     let anchors = model.generate_anchors_for_input(320, 320, &device);
     let num_anchors = anchors.len();
@@ -52,7 +48,7 @@ fn test_ssd_full_pipeline() {
     let matcher = Matcher::new(0.5, 0.4);
     let encoder = SSDTargetEncoder::new(matcher);
 
-    let (tgt_classes, tgt_boxes, pos_mask) = encoder.encode_batch::<B>(
+    let (tgt_classes, tgt_boxes, pos_mask) = encoder.encode_batch(
         &anchors,
         batch.boxes.clone(),
         batch.labels.clone(),
@@ -67,9 +63,7 @@ fn test_ssd_full_pipeline() {
 
 #[test]
 fn training_test_forward_backward() {
-    type B = Autodiff<Wgpu>;
-
-    let device = <B as Backend>::Device::default();
+    let device = Device::default().autodiff();
 
     let coco = ImageFolderDataset::new_coco_detection(
         "tests/dataset_coco.json",
@@ -77,16 +71,20 @@ fn training_test_forward_backward() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::<B>::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
+
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(1)
+        .set_device(device.clone())
         .build(dataset);
 
     let mut iter = loader.iter();
-    let batch = iter.next().expect("expected at least one batch");
+    let batch = iter
+        .next()
+        .expect("expected at least one batch")
+        .expect("expected batch loading to succeed");
 
-    let model =
-        SSDLiteMobileNetV3::<B>::new(MobileNetV3Arch::Large, 2, &device);
+    let model = SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, 2, &device);
 
     let anchors = model.generate_anchors_for_input(320, 320, &device);
     let encoder = SSDTargetEncoder::new(Matcher::new(0.5, 0.4));
@@ -94,10 +92,10 @@ fn training_test_forward_backward() {
 
     let train_model = SSDTrainModel {
         model,
-        anchors: burn::module::Ignored(anchors),
-        encoder: burn::module::Ignored(encoder),
-        loss_fn: burn::module::Ignored(loss_fn),
-        device: burn::module::Ignored(device.clone()),
+        anchors: anchors,
+        encoder: encoder,
+        loss_fn: loss_fn,
+        device: device.clone(),
     };
 
     // TrainStep::step -> TrainOutput<SSDOutput>
@@ -113,9 +111,7 @@ fn training_test_optimizer_step() {
     use burn::optim::AdamConfig;
     use burn::train::Learner;
 
-    type B = Autodiff<Wgpu>;
-
-    let device = <B as Backend>::Device::default();
+    let device = Device::default().autodiff();
 
     let coco = ImageFolderDataset::new_coco_detection(
         "tests/dataset_coco.json",
@@ -123,16 +119,19 @@ fn training_test_optimizer_step() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::<B>::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(1)
+        .set_device(device.clone())
         .build(dataset);
 
     let mut iter = loader.iter();
-    let batch = iter.next().expect("expected at least one batch");
+    let batch = iter
+        .next()
+        .expect("expected at least one batch")
+        .expect("expected batch loading to succeed");
 
-    let model =
-        SSDLiteMobileNetV3::<B>::new(MobileNetV3Arch::Large, 2, &device);
+    let model = SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, 2, &device);
 
     let anchors = model.generate_anchors_for_input(320, 320, &device);
     let encoder = SSDTargetEncoder::new(Matcher::new(0.5, 0.4));
@@ -140,13 +139,13 @@ fn training_test_optimizer_step() {
 
     let train_model = SSDTrainModel {
         model,
-        anchors: burn::module::Ignored(anchors),
-        encoder: burn::module::Ignored(encoder),
-        loss_fn: burn::module::Ignored(loss_fn),
-        device: burn::module::Ignored(device.clone()),
+        anchors: anchors,
+        encoder: encoder,
+        loss_fn: loss_fn,
+        device: device.clone(),
     };
 
-    let optim = AdamConfig::new().init::<B, SSDTrainModel<B>>();
+    let optim = AdamConfig::new().init();
     let mut learner = Learner::new(train_model, optim, 1e-4_f64);
 
     let out = TrainStep::step(&learner.model(), batch);

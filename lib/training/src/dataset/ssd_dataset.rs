@@ -1,32 +1,32 @@
 use burn::data::dataset::vision::{
     Annotation, BoundingBox, ImageDatasetItem, ImageFolderDataset,
 };
-use burn::data::dataset::Dataset;
-use burn::tensor::{backend::Backend, Tensor};
+use burn::data::dataset::{Dataset, DatasetError};
+use burn::tensor::{Device, Tensor};
 use transforms::{
     coco_to_cxcywh_normalized, img_resize_ssd, img_to_tensor, scale_coco_boxes,
 };
 
 #[derive(Clone, Debug)]
-pub struct SSDSample<B: Backend> {
-    pub image: Tensor<B, 3>,  // [C, H, W]
+pub struct SSDSample {
+    pub image: Tensor<3>,     // [C, H, W]
     pub boxes: Vec<[f32; 4]>, // normalized cxcywh
     pub labels: Vec<usize>,   // class ids
 }
 
-pub struct SSDDataset<B: Backend> {
+pub struct SSDDataset {
     inner: ImageFolderDataset,
     input_w: u32,
     input_h: u32,
-    device: B::Device,
+    device: Device,
 }
 
-impl<B: Backend> SSDDataset<B> {
+impl SSDDataset {
     pub fn new(
         inner: ImageFolderDataset,
         input_w: u32,
         input_h: u32,
-        device: B::Device,
+        device: Device,
     ) -> Self {
         return Self {
             inner,
@@ -37,20 +37,24 @@ impl<B: Backend> SSDDataset<B> {
     }
 }
 
-impl<B: Backend> Dataset<SSDSample<B>> for SSDDataset<B> {
+impl Dataset<SSDSample> for SSDDataset {
     fn len(&self) -> usize {
         return self.inner.len();
     }
 
-    fn get(&self, index: usize) -> Option<SSDSample<B>> {
+    fn get(&self, index: usize) -> Result<SSDSample, DatasetError> {
         let item: ImageDatasetItem = self.inner.get(index)?;
 
-        // convert Vec<PixelDepth> -> Vec<u8>
-        let pixels_u8: Vec<u8> = item
-            .image
-            .iter()
-            .map(|p| u8::try_from(*p).expect("expected U8 pixel depth"))
-            .collect();
+        let pixels_u8: Vec<u8> = match item.image {
+            burn::data::dataset::vision::PixelData::U8(bytes) => bytes,
+            burn::data::dataset::vision::PixelData::U16(words) => {
+                words.iter().map(|&w| (w >> 8) as u8).collect()
+            }
+            burn::data::dataset::vision::PixelData::F32(floats) => floats
+                .iter()
+                .map(|&f| (f.clamp(0.0, 1.0) * 255.0).round() as u8)
+                .collect(),
+        };
 
         let w = item.image_width as u32;
         let h = item.image_height as u32;
@@ -92,9 +96,9 @@ impl<B: Backend> Dataset<SSDSample<B>> for SSDDataset<B> {
         );
 
         // convert resized image to tensor
-        let image = img_to_tensor::<B>(resized, &self.device);
+        let image = img_to_tensor(resized, &self.device);
 
-        return Some(SSDSample {
+        return Ok(SSDSample {
             image,
             boxes,
             labels,
@@ -102,13 +106,13 @@ impl<B: Backend> Dataset<SSDSample<B>> for SSDDataset<B> {
     }
 }
 
-impl<B: Backend> SSDDataset<B> {
+impl SSDDataset {
     pub fn num_classes(&self) -> usize {
         // scan all annotations and find the maximum label
         let mut max_label = 0;
 
         for i in 0..self.inner.len() {
-            if let Some(item) = self.inner.get(i) {
+            if let Ok(item) = self.inner.get(i) {
                 if let Annotation::BoundingBoxes(v) = item.annotation {
                     for bb in v {
                         max_label = max_label.max(bb.label);
@@ -125,10 +129,7 @@ impl<B: Backend> SSDDataset<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::Wgpu;
     use burn::data::dataset::vision::ImageFolderDataset;
-
-    type B = Wgpu;
 
     const COCO_JSON: &str = "tests/dataset_coco.json";
     const COCO_IMAGES: &str = "tests/image_folder_coco";
@@ -156,19 +157,24 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::<B>::new(coco, 320, 320, Default::default());
+        let dataset = SSDDataset::new(coco, 320, 320, Default::default());
 
         // Find an image with no boxes
-        let sample = (0..dataset.len())
-            .find_map(|i| {
-                let s = dataset.get(i)?;
-                if s.boxes.is_empty() {
-                    Some(s)
-                } else {
-                    None
-                }
-            })
-            .expect("expected at least one empty annotation");
+        let sample_result =
+            (0..dataset.len())
+                .map(|i| dataset.get(i))
+                .find(|res| match res {
+                    Ok(s) => s.boxes.is_empty(),
+                    Err(_) => true, // stop here to catch and surface the error
+                });
+
+        let sample = match sample_result {
+            Some(Ok(s)) => s,
+            Some(Err(e)) => {
+                panic!("Dataset error encountered during scan: {:?}", e)
+            }
+            None => panic!("expected at least one empty annotation"),
+        };
 
         assert!(sample.boxes.is_empty());
         assert!(sample.labels.is_empty());
@@ -181,7 +187,7 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::<B>::new(coco, 320, 320, Default::default());
+        let dataset = SSDDataset::new(coco, 320, 320, Default::default());
 
         let sample = dataset.get(0).expect("sample should exist");
 

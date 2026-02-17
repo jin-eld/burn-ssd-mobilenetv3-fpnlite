@@ -3,63 +3,57 @@ use crate::loss::SSDLoss;
 use crate::target::target_encoder::SSDTargetEncoder;
 use crate::training::ssd_output::SSDOutput;
 
-use burn::module::{Ignored, Module};
+use burn::module::Module;
 use burn::optim::GradientsParams;
-use burn::tensor::backend::{AutodiffBackend, Backend};
 use burn::train::{InferenceStep, TrainOutput, TrainStep};
-use burn::Tensor;
+use burn::{tensor::Device, Tensor};
 
 use ssd::model::SSDLiteMobileNetV3;
 
 #[derive(Module, Debug)]
-pub struct SSDTrainModel<B: Backend> {
-    pub model: SSDLiteMobileNetV3<B>,
-    pub anchors: Ignored<Vec<[f32; 4]>>,
-    pub encoder: Ignored<SSDTargetEncoder>,
-    pub loss_fn: Ignored<SSDLoss>,
-    pub device: Ignored<B::Device>,
+pub struct SSDTrainModel {
+    pub model: SSDLiteMobileNetV3,
+    #[module(skip)]
+    pub anchors: Vec<[f32; 4]>,
+    #[module(skip)]
+    pub encoder: SSDTargetEncoder,
+    #[module(skip)]
+    pub loss_fn: SSDLoss,
+    #[module(skip)]
+    pub device: Device,
 }
 
-pub trait SSDTraining<B: Backend> {
+pub trait SSDTraining {
     fn forward_training(
         &self,
-        batch: SSDBatch<B>,
+        batch: SSDBatch,
         anchors: &Vec<[f32; 4]>,
         encoder: &SSDTargetEncoder,
         loss_fn: &SSDLoss,
-        device: &B::Device,
-    ) -> SSDOutput<B>;
+        device: &Device,
+    ) -> SSDOutput;
 }
 
-impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
+impl SSDTraining for SSDLiteMobileNetV3 {
     fn forward_training(
         &self,
-        batch: SSDBatch<B>,
+        batch: SSDBatch,
         anchors: &Vec<[f32; 4]>,
         encoder: &SSDTargetEncoder,
         loss_fn: &SSDLoss,
-        device: &B::Device,
-    ) -> SSDOutput<B> {
+        device: &Device,
+    ) -> SSDOutput {
         // raw head outputs: logits + deltas
         let (pred_logits, pred_deltas) = self.forward_raw(batch.images);
 
         // decode deltas -> boxes using training anchors
-        let anchors_tensor = anchors_to_tensor::<B>(anchors, device);
-
-        let pred_boxes = self
-            .decoder()
-            .decode::<B>(pred_deltas.clone(), anchors_tensor);
-
+        let anchors_tensor = anchors_to_tensor(anchors, device);
         let pred_boxes =
-            Tensor::<B, 3>::from_data(pred_boxes.to_data(), device);
+            self.decoder().decode(pred_deltas.clone(), anchors_tensor);
 
         // encode targets
-        let (tgt_classes, tgt_boxes, pos_mask) = encoder.encode_batch::<B>(
-            anchors,
-            batch.boxes,
-            batch.labels,
-            device,
-        );
+        let (tgt_classes, tgt_boxes, pos_mask) =
+            encoder.encode_batch(anchors, batch.boxes, batch.labels, device);
 
         // compute loss on decoded boxes
         let (loss_total, loss_cls, loss_reg) = loss_fn.forward(
@@ -83,51 +77,51 @@ impl<B: Backend> SSDTraining<B> for SSDLiteMobileNetV3<B> {
     }
 }
 
-impl<B: AutodiffBackend> TrainStep for SSDTrainModel<B>
+impl TrainStep for SSDTrainModel
 where
-    SSDLiteMobileNetV3<B>: SSDTraining<B>,
+    SSDLiteMobileNetV3: SSDTraining,
 {
-    type Input = SSDBatch<B>;
-    type Output = SSDOutput<B>;
+    type Input = SSDBatch;
+    type Output = SSDOutput;
 
     fn step(&self, batch: Self::Input) -> TrainOutput<Self::Output> {
         let out = self.model.forward_training(
             batch,
-            &self.anchors.0,
-            &self.encoder.0,
-            &self.loss_fn.0,
-            &self.device.0,
+            &self.anchors,
+            &self.encoder,
+            &self.loss_fn,
+            &self.device,
         );
 
         let raw_grads = out.loss.backward();
-        let grads = GradientsParams::from_grads::<B, _>(raw_grads, self);
+        let grads = GradientsParams::from_grads::<_>(raw_grads, self);
 
         return TrainOutput { grads, item: out };
     }
 }
 
-impl<B: Backend> InferenceStep for SSDTrainModel<B>
+impl InferenceStep for SSDTrainModel
 where
-    SSDLiteMobileNetV3<B>: SSDTraining<B>,
+    SSDLiteMobileNetV3: SSDTraining,
 {
-    type Input = SSDBatch<B>;
-    type Output = SSDOutput<B>;
+    type Input = SSDBatch;
+    type Output = SSDOutput;
 
     fn step(&self, batch: Self::Input) -> Self::Output {
         return self.model.forward_training(
             batch,
-            &self.anchors.0,
-            &self.encoder.0,
-            &self.loss_fn.0,
-            &self.device.0,
+            &self.anchors,
+            &self.encoder,
+            &self.loss_fn,
+            &self.device,
         );
     }
 }
 
-pub fn anchors_to_tensor<B: Backend>(
+pub fn anchors_to_tensor(
     anchors: &Vec<[f32; 4]>,
-    device: &B::Device,
-) -> Tensor<B, 2> {
+    device: &Device,
+) -> Tensor<2> {
     let num = anchors.len();
 
     // flatten into Vec<f32>
@@ -137,7 +131,7 @@ pub fn anchors_to_tensor<B: Backend>(
     }
 
     // 1D tensor from &[f32]
-    let t1 = Tensor::<B, 1>::from_floats(flat.as_slice(), device);
+    let t1 = Tensor::<1>::from_floats(flat.as_slice(), device);
 
     // reshape to [num_anchors, 4]
     return t1.reshape([num, 4]);

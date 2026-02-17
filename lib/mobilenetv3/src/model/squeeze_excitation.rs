@@ -7,7 +7,7 @@ use burn::{
         pool::{AdaptiveAvgPool2d, AdaptiveAvgPool2dConfig},
         HardSigmoid, HardSigmoidConfig, PaddingConfig2d, Relu,
     },
-    tensor::{backend::Backend, Tensor},
+    tensor::{Device, Tensor},
 };
 
 #[derive(Config, Debug)]
@@ -19,7 +19,7 @@ pub struct SqueezeExcitationConfig {
 }
 
 impl SqueezeExcitationConfig {
-    pub fn init<B: Backend>(&self, device: &B::Device) -> SqueezeExcitation<B> {
+    pub fn init(&self, device: &Device) -> SqueezeExcitation {
         let squeeze_channels = make_divisible(
             self.input_channels as f64 / self.squeeze_factor as f64,
             8,
@@ -49,16 +49,16 @@ impl SqueezeExcitationConfig {
 }
 
 #[derive(Module, Debug)]
-pub struct SqueezeExcitation<B: Backend> {
-    fc1: Conv2d<B>,
+pub struct SqueezeExcitation {
+    fc1: Conv2d,
     relu: Relu,
-    fc2: Conv2d<B>,
+    fc2: Conv2d,
     avgpool: AdaptiveAvgPool2d,
     hardsigmoid: HardSigmoid,
 }
 
-impl<B: Backend> SqueezeExcitation<B> {
-    pub fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+impl SqueezeExcitation {
+    pub fn forward(&self, input: Tensor<4>) -> Tensor<4> {
         let x = self.avgpool.forward(input.clone());
         let x = self.fc1.forward(x);
         let x = self.relu.forward(x);

@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 burn.workspace = true
 burn-dataset.workspace = true
+burn-dispatch.workspace = true
 image.workspace = true
 mobilenetv3.workspace = true
 ssd.workspace = true

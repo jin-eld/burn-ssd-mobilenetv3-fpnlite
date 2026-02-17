@@ -1,7 +1,4 @@
-use burn::{
-    tensor::backend::Backend,
-    tensor::{Int, Tensor},
-};
+use burn::tensor::Tensor;
 
 #[derive(Debug, Clone)]
 pub struct EncodeConfig {
@@ -33,35 +30,28 @@ impl BoxEncoder {
     /// - `gt_boxes`: [N, A, 4] (cx, cy, w, h)
     /// - `anchors`:  [A, 4]    (cx, cy, w, h)
     /// - returns:    [N, A, 4] (tx, ty, tw, th)
-    pub fn encode<B: Backend>(
+    pub fn encode(
         &self,
-        gt_boxes: Tensor<B, 3>, // [N, A, 4]
-        anchors: Tensor<B, 2>,  // [A, 4]
-    ) -> Tensor<B, 3> {
+        gt_boxes: Tensor<3>, // [N, A, 4]
+        anchors: Tensor<2>,  // [A, 4]
+    ) -> Tensor<3> {
         let center_var = self.cfg.center_variance;
         let size_var = self.cfg.size_variance;
 
         // anchors: [A,4] -> [1,A,4]
         let anchors = anchors.unsqueeze_dim(0);
 
-        let device = gt_boxes.device();
-
-        let idx0 = Tensor::<B, 1, Int>::from_data([0], &device);
-        let idx1 = Tensor::<B, 1, Int>::from_data([1], &device);
-        let idx2 = Tensor::<B, 1, Int>::from_data([2], &device);
-        let idx3 = Tensor::<B, 1, Int>::from_data([3], &device);
-
         // GT components
-        let gx = gt_boxes.clone().select(2, idx0.clone());
-        let gy = gt_boxes.clone().select(2, idx1.clone());
-        let gw = gt_boxes.clone().select(2, idx2.clone());
-        let gh = gt_boxes.clone().select(2, idx3.clone());
+        let gx = gt_boxes.clone().narrow(2, 0, 1);
+        let gy = gt_boxes.clone().narrow(2, 1, 1);
+        let gw = gt_boxes.clone().narrow(2, 2, 1);
+        let gh = gt_boxes.clone().narrow(2, 3, 1);
 
         // Anchor components
-        let ax = anchors.clone().select(2, idx0.clone());
-        let ay = anchors.clone().select(2, idx1.clone());
-        let aw = anchors.clone().select(2, idx2.clone());
-        let ah = anchors.clone().select(2, idx3.clone());
+        let ax = anchors.clone().narrow(2, 0, 1);
+        let ay = anchors.clone().narrow(2, 1, 1);
+        let aw = anchors.clone().narrow(2, 2, 1);
+        let ah = anchors.clone().narrow(2, 3, 1);
 
         // SSD encode
         let tx = gx.sub(ax.clone()).div(aw.clone()).div_scalar(center_var);

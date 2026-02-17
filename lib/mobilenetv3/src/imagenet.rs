@@ -5,7 +5,7 @@
 // https://github.com/tracel-ai/models/blob/main/LICENSE-MIT
 
 use burn::prelude::Shape;
-use burn::tensor::{backend::Backend, Device, Tensor, TensorData};
+use burn::tensor::{Device, Tensor, TensorData};
 
 pub const IMAGE_SIZE: u32 = 224; // width = height
 
@@ -13,19 +13,19 @@ const MEAN: [f32; 3] = [0.485, 0.456, 0.406];
 const STD: [f32; 3] = [0.229, 0.224, 0.225];
 
 /// Normalizer for the ImageNet dataset.
-pub struct Normalizer<B: Backend> {
-    pub mean: Tensor<B, 4>,
-    pub std: Tensor<B, 4>,
+pub struct Normalizer {
+    pub mean: Tensor<4>,
+    pub std: Tensor<4>,
 }
 
-impl<B: Backend> Normalizer<B> {
+impl Normalizer {
     /// Creates a new normalizer.
-    pub fn new(device: &Device<B>) -> Self {
-        let mean = Tensor::<B, 4>::from_data(
+    pub fn new(device: &Device) -> Self {
+        let mean = Tensor::<4>::from_data(
             TensorData::new(MEAN.to_vec(), Shape::new([1, 3, 1, 1])),
             device,
         );
-        let std = Tensor::<B, 4>::from_data(
+        let std = Tensor::<4>::from_data(
             TensorData::new(STD.to_vec(), Shape::new([1, 3, 1, 1])),
             device,
         );
@@ -40,7 +40,7 @@ impl<B: Backend> Normalizer<B> {
     ///
     /// The normalization is done according to the following formula:
     /// `input = (input - mean) / std`
-    pub fn normalize(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+    pub fn normalize(&self, input: Tensor<4>) -> Tensor<4> {
         return (input - self.mean.clone()) / self.std.clone();
     }
 
@@ -51,7 +51,7 @@ impl<B: Backend> Normalizer<B> {
     ///
     /// The reverse normalization is done according to the following formula:
     /// `input = (normalized * std) + mean`
-    pub fn denormalize(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+    pub fn denormalize(&self, input: Tensor<4>) -> Tensor<4> {
         return (input * self.std.clone()) + self.mean.clone();
     }
 }

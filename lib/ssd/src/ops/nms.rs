@@ -1,5 +1,5 @@
 use crate::ops::iou::{cxcywh_to_xyxy, iou_xyxy};
-use burn::tensor::{backend::Backend, Tensor};
+use burn::tensor::Tensor;
 
 pub struct NmsOps;
 
@@ -7,9 +7,9 @@ impl NmsOps {
     /// Greedy NMS for a single class.
     /// boxes: [A, 4] in cx,cy,w,h
     /// scores: [A]
-    pub fn nms_single_class<B: Backend>(
-        boxes: &Tensor<B, 2>,
-        scores: &Tensor<B, 1>,
+    pub fn nms_single_class(
+        boxes: &Tensor<2>,
+        scores: &Tensor<1>,
         iou_threshold: f32,
         max_detections: usize,
     ) -> Vec<usize> {
@@ -64,25 +64,21 @@ impl NmsOps {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::{Wgpu, WgpuDevice};
-    use burn::tensor::Tensor;
+    use burn::tensor::{Device, Tensor};
 
-    fn tensor_boxes(
-        device: &WgpuDevice,
-        boxes: &[[f32; 4]],
-    ) -> Tensor<Wgpu, 2> {
+    fn tensor_boxes(device: &Device, boxes: &[[f32; 4]]) -> Tensor<2> {
         let flat: Vec<f32> = boxes.iter().flatten().copied().collect();
-        let t = Tensor::<Wgpu, 1>::from_floats(flat.as_slice(), device);
+        let t = Tensor::<1>::from_floats(flat.as_slice(), device);
         return t.reshape([boxes.len(), 4]);
     }
 
-    fn tensor_scores(device: &WgpuDevice, scores: &[f32]) -> Tensor<Wgpu, 1> {
-        return Tensor::<Wgpu, 1>::from_floats(scores, device);
+    fn tensor_scores(device: &Device, scores: &[f32]) -> Tensor<1> {
+        return Tensor::<1>::from_floats(scores, device);
     }
 
     #[test]
     fn test_nms_simple_suppression() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.5, 0.5, 0.4, 0.4],
@@ -102,7 +98,7 @@ mod tests {
 
     #[test]
     fn test_nms_no_suppression_low_iou() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.1, 0.1, 0.2, 0.2],
@@ -122,7 +118,7 @@ mod tests {
 
     #[test]
     fn test_nms_respects_max_detections() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.1, 0.1, 0.2, 0.2],
@@ -144,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_nms_threshold_behavior() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [[0.5, 0.5, 0.4, 0.4], [0.52, 0.52, 0.4, 0.4]];
         let scores = [0.9, 0.8];
@@ -170,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_nms_identical_boxes() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [[0.5, 0.5, 0.4, 0.4], [0.5, 0.5, 0.4, 0.4]];
         let scores = [0.9, 0.8];
@@ -187,7 +183,7 @@ mod tests {
 
     #[test]
     fn test_nms_touching_edges_no_overlap() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         // Two boxes touching at x2 = x1
         let boxes = [
@@ -209,7 +205,7 @@ mod tests {
 
     #[test]
     fn test_nms_iou_equal_threshold_kept() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         // Two boxes with IoU = 0.25
         let boxes = [[0.5, 0.5, 0.4, 0.4], [0.5, 0.5, 0.2, 0.2]];
@@ -230,7 +226,7 @@ mod tests {
 
     #[test]
     fn test_nms_all_suppressed_except_best() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.5, 0.5, 0.4, 0.4],
@@ -252,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_nms_identical_scores_deterministic() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [[0.5, 0.5, 0.4, 0.4], [0.52, 0.52, 0.4, 0.4]];
 
@@ -271,7 +267,7 @@ mod tests {
 
     #[test]
     fn test_nms_zero_area_boxes() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.5, 0.5, 0.0, 0.4], // zero width
@@ -294,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_nms_large_vs_small_boxes() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let boxes = [
             [0.5, 0.5, 0.9, 0.9], // huge box

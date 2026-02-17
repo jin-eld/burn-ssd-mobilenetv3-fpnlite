@@ -1,6 +1,6 @@
 use burn::{
-    module::{Ignored, Module},
-    tensor::{backend::Backend, Tensor},
+    module::Module,
+    tensor::{Device, Tensor},
 };
 
 use fpnlite::{FpnLite, FpnLiteConfig};
@@ -10,32 +10,34 @@ use crate::ops::postprocess::{ssd_postprocess, Detection};
 use crate::{AnchorGenerator, BoxDecoder, DecodeConfig, SSDLiteHead};
 
 #[derive(Debug, Module)]
-pub struct SSDLiteMobileNetV3Model<B: Backend> {
-    backbone: MobileNetV3<B>,
-    fpn: FpnLite<B>,
-    head: SSDLiteHead<B>,
+pub struct SSDLiteMobileNetV3Model {
+    backbone: MobileNetV3,
+    fpn: FpnLite,
+    head: SSDLiteHead,
 }
 
 #[derive(Debug, Module)]
-pub struct SSDLiteMobileNetV3<B: Backend> {
-    model: SSDLiteMobileNetV3Model<B>,
-    anchors: Ignored<AnchorGenerator>,
-    decoder: Ignored<BoxDecoder>,
-    score_threshold: Ignored<f32>,
-    iou_threshold: Ignored<f32>,
-    max_detections: Ignored<usize>,
+pub struct SSDLiteMobileNetV3 {
+    model: SSDLiteMobileNetV3Model,
+    #[module(skip)]
+    anchors: AnchorGenerator,
+    #[module(skip)]
+    decoder: BoxDecoder,
+    #[module(skip)]
+    score_threshold: f32,
+    #[module(skip)]
+    iou_threshold: f32,
+    #[module(skip)]
+    max_detections: usize,
 }
 
-impl<B: Backend> SSDLiteMobileNetV3Model<B> {
+impl SSDLiteMobileNetV3Model {
     /// Forward pass up to the SSD head (no anchors, no decoding).
     ///
     /// Returns:
     /// - cls_logits:  [N, A, num_classes]
     /// - bbox_deltas: [N, A, 4]
-    pub fn forward_head(
-        &self,
-        x: Tensor<B, 4>,
-    ) -> (Tensor<B, 3>, Tensor<B, 3>) {
+    pub fn forward_head(&self, x: Tensor<4>) -> (Tensor<3>, Tensor<3>) {
         // 1. backbone: get C3 and C4 feature maps
         let (c3, c4) = self.backbone.forward_features(x);
 
@@ -47,11 +49,11 @@ impl<B: Backend> SSDLiteMobileNetV3Model<B> {
     }
 }
 
-impl<B: Backend> SSDLiteMobileNetV3<B> {
+impl SSDLiteMobileNetV3 {
     pub fn new(
         arch: MobileNetV3Arch,
         num_classes: usize,
-        device: &B::Device,
+        device: &Device,
     ) -> Self {
         // Backbone
         let backbone_cfg = MobileNetV3Config::new();
@@ -94,20 +96,20 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
 
         return Self {
             model,
-            anchors: Ignored(anchors),
-            decoder: Ignored(decoder),
-            score_threshold: Ignored(0.5),
-            iou_threshold: Ignored(0.5),
-            max_detections: Ignored(200),
+            anchors,
+            decoder,
+            score_threshold: 0.5,
+            iou_threshold: 0.5,
+            max_detections: 200,
         };
     }
 
-    pub fn inner_model(&self) -> &SSDLiteMobileNetV3Model<B> {
+    pub fn inner_model(&self) -> &SSDLiteMobileNetV3Model {
         &self.model
     }
 
     pub fn decoder(&self) -> &BoxDecoder {
-        &self.decoder.0
+        &self.decoder
     }
 
     /// Full forward pass: image -> backbone -> FPN -> head -> decoded boxes.
@@ -115,14 +117,11 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
     /// Returns:
     /// - cls_logits: [N, A, num_classes]
     /// - boxes:      [N, A, 4] (cx, cy, w, h) in normalized coords
-    pub fn forward_raw(&self, x: Tensor<B, 4>) -> (Tensor<B, 3>, Tensor<B, 3>) {
+    pub fn forward_raw(&self, x: Tensor<4>) -> (Tensor<3>, Tensor<3>) {
         return self.model.forward_head(x);
     }
 
-    pub fn forward(
-        &self,
-        input: Tensor<B, 4>,
-    ) -> Result<Vec<Detection>, String> {
+    pub fn forward(&self, input: Tensor<4>) -> Result<Vec<Detection>, String> {
         let (class_logits, decoded_boxes) = self.forward_raw(input);
 
         // Expect batch size 1
@@ -145,9 +144,9 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
         return ssd_postprocess(
             &decoded_boxes,
             &class_logits,
-            self.score_threshold.0,
-            self.iou_threshold.0,
-            self.max_detections.0,
+            self.score_threshold,
+            self.iou_threshold,
+            self.max_detections,
         );
     }
 
@@ -162,10 +161,10 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
         &self,
         input_h: u32,
         input_w: u32,
-        device: &B::Device,
+        device: &Device,
     ) -> Vec<[f32; 4]> {
         // dummy input
-        let dummy = Tensor::<B, 4>::zeros(
+        let dummy = Tensor::<4>::zeros(
             [1, 3, input_h as usize, input_w as usize],
             device,
         );
@@ -186,24 +185,22 @@ impl<B: Backend> SSDLiteMobileNetV3<B> {
             .collect();
 
         // generate anchors using the model’s AnchorGenerator
-        self.anchors.0.generate(&feature_map_sizes)
+        self.anchors.generate(&feature_map_sizes)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::model::{MobileNetV3Arch, SSDLiteMobileNetV3};
-    use burn::backend::wgpu::{Wgpu, WgpuDevice};
-    use burn::tensor::Tensor;
+    use burn::tensor::{Device, Tensor};
 
     #[test]
     fn test_ssd_end_to_end_forward() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
-        let model =
-            SSDLiteMobileNetV3::<Wgpu>::new(MobileNetV3Arch::Small, 3, &device);
+        let model = SSDLiteMobileNetV3::new(MobileNetV3Arch::Small, 3, &device);
 
-        let input = Tensor::<Wgpu, 4>::zeros([1, 3, 160, 160], &device);
+        let input = Tensor::<4>::zeros([1, 3, 160, 160], &device);
 
         let detections = model
             .forward(input)

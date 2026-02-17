@@ -1,9 +1,7 @@
 use burn::{
     data::dataloader::DataLoaderBuilder,
-    module::Ignored,
     optim::AdamConfig,
-    record::CompactRecorder,
-    tensor::backend::{AutodiffBackend, Backend},
+    tensor::Device,
     train::{Learner, SupervisedTraining},
 };
 
@@ -15,11 +13,9 @@ use crate::training::ssd_train_step::SSDTrainModel;
 use mobilenetv3::MobileNetV3Arch;
 use ssd::model::SSDLiteMobileNetV3;
 
-pub fn train<B: AutodiffBackend>(
-    coco_json: &str,
-    coco_images: &str,
-    device: B::Device,
-) {
+pub fn train(coco_json: &str, coco_images: &str, device: &Device) {
+    let device = device.clone().autodiff();
+
     let input_w = 320;
     let input_h = 320;
 
@@ -39,18 +35,13 @@ pub fn train<B: AutodiffBackend>(
         .expect("Failed to load COCO dataset (valid)");
 
     let device_train = device.clone();
-    let device_valid =
-        <<B as AutodiffBackend>::InnerBackend as Backend>::Device::default();
+    let device_valid = device.clone();
 
     let dataset_train =
-        SSDDataset::<B>::new(inner_train, input_w, input_h, device_train);
+        SSDDataset::new(inner_train, input_w, input_h, device_train);
 
-    let dataset_valid = SSDDataset::<<B as AutodiffBackend>::InnerBackend>::new(
-        inner_valid,
-        input_w,
-        input_h,
-        device_valid,
-    );
+    let dataset_valid =
+        SSDDataset::new(inner_valid, input_w, input_h, device_valid);
 
     let num_classes = dataset_train.num_classes();
 
@@ -60,18 +51,17 @@ pub fn train<B: AutodiffBackend>(
     let train_loader = DataLoaderBuilder::new(batcher_train)
         .batch_size(8)
         .shuffle(469)
+        .set_device(device.clone())
         .build(dataset_train);
 
     let valid_loader = DataLoaderBuilder::new(batcher_valid)
         .batch_size(8)
         .shuffle(1337)
+        .set_device(device.clone())
         .build(dataset_valid);
 
-    let model = SSDLiteMobileNetV3::<B>::new(
-        MobileNetV3Arch::Large,
-        num_classes,
-        &device,
-    );
+    let model =
+        SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, num_classes, &device);
 
     let matcher = Matcher::new(0.5, 0.4);
     let encoder = SSDTargetEncoder::new(matcher);
@@ -81,15 +71,13 @@ pub fn train<B: AutodiffBackend>(
 
     let train_model = SSDTrainModel {
         model,
-        anchors: Ignored(anchors),
-        encoder: Ignored(encoder),
-        loss_fn: Ignored(loss_fn),
-        device: Ignored(device.clone()),
+        anchors: anchors,
+        encoder: encoder,
+        loss_fn: loss_fn,
+        device: device.clone(),
     };
 
-    let optim = AdamConfig::new().init::<B, SSDTrainModel<B>>();
-
-    let recorder = CompactRecorder::new();
+    let optim = AdamConfig::new().init();
 
     let lr: f64 = 1e-4;
     let learner = Learner::new(train_model, optim, lr);
@@ -100,7 +88,7 @@ pub fn train<B: AutodiffBackend>(
         valid_loader,
     )
     .num_epochs(10)
-    .with_file_checkpointer(recorder);
+    .with_default_checkpointers();
 
     let _trained = training.launch(learner);
 

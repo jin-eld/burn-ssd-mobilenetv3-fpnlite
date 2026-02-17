@@ -7,7 +7,7 @@ use burn::{
     config::Config,
     module::Module,
     nn::Relu,
-    tensor::{backend::Backend, Tensor},
+    tensor::{Device, Tensor},
 };
 use serde::{Deserialize, Serialize};
 
@@ -34,7 +34,7 @@ pub struct InvertedResidualConfig {
 }
 
 impl InvertedResidualConfig {
-    pub fn init<B: Backend>(&self, device: &B::Device) -> InvertedResidual<B> {
+    pub fn init(&self, device: &Device) -> InvertedResidual {
         if self.stride < 1 || self.stride > 2 {
             panic!("illegal stride value");
         }
@@ -111,16 +111,16 @@ impl InvertedResidualConfig {
 }
 
 #[derive(Module, Debug)]
-pub struct InvertedResidual<B: Backend> {
-    expand_conv: Option<ConvBNActivation<B>>,
-    depthwise_conv: ConvBNActivation<B>,
-    se_layer: Option<SqueezeExcitation<B>>,
-    project_conv: ConvBNActivation<B>,
+pub struct InvertedResidual {
+    expand_conv: Option<ConvBNActivation>,
+    depthwise_conv: ConvBNActivation,
+    se_layer: Option<SqueezeExcitation>,
+    project_conv: ConvBNActivation,
     use_res_connect: bool,
 }
 
-impl<B: Backend> InvertedResidual<B> {
-    pub fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+impl InvertedResidual {
+    pub fn forward(&self, input: Tensor<4>) -> Tensor<4> {
         let mut x = input.clone();
 
         if let Some(ref conv) = self.expand_conv {

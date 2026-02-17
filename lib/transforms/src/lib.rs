@@ -45,19 +45,16 @@ pub fn img_resize_and_center_crop(
 
 // Based on:
 // https://github.com/tracel-ai/models/blob/main/mobilenetv2-burn/examples/inference.rs
-pub fn img_to_tensor<B: Backend>(
-    img: DynamicImage,
-    device: &Device<B>,
-) -> Tensor<B, 3> {
+pub fn img_to_tensor(img: DynamicImage, device: &Device) -> Tensor<3> {
     let (width, height) = img.dimensions();
     let raw_pixels = img.into_rgb8().into_raw();
-    Tensor::<B, 3>::from_data(TensorData::new(raw_pixels, Shape::new([height as usize, width as usize, 3])), device)
+    Tensor::<3>::from_data(TensorData::new(raw_pixels, Shape::new([height as usize, width as usize, 3])), device)
         .permute([2, 0, 1])  // [H, W, C] -> [C, H, W]
         / 255 // normalize between [0, 1]
 }
 
-pub fn tensor_to_img<B: Backend>(
-    tensor: Tensor<B, 4>,
+pub fn tensor_to_img(
+    tensor: Tensor<4>,
     width: u32,
     height: u32,
 ) -> ImageBuffer<Rgb<u8>, Vec<u8>> {

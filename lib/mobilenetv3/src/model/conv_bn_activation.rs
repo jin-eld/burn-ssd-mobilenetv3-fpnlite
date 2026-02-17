@@ -6,7 +6,7 @@ use burn::{
         conv::{Conv2d, Conv2dConfig},
         BatchNorm, BatchNormConfig, PaddingConfig2d,
     },
-    tensor::{backend::Backend, Tensor},
+    tensor::{Device, Tensor},
 };
 
 #[derive(Config, Debug)]
@@ -31,7 +31,7 @@ pub struct ConvBNActivationConfig {
 }
 
 impl ConvBNActivationConfig {
-    pub fn init<B: Backend>(&self, device: &B::Device) -> ConvBNActivation<B> {
+    pub fn init(&self, device: &Device) -> ConvBNActivation {
         let padding = (self.kernel_size - 1) / 2 * self.dilation;
 
         return ConvBNActivation {
@@ -40,7 +40,9 @@ impl ConvBNActivationConfig {
                 [self.kernel_size, self.kernel_size],
             )
             .with_stride([self.stride, self.stride])
-            .with_padding(PaddingConfig2d::Explicit(padding, padding))
+            .with_padding(PaddingConfig2d::Explicit(
+                padding, padding, padding, padding,
+            ))
             .with_dilation([self.dilation, self.dilation])
             .with_groups(self.groups)
             .with_bias(false)
@@ -55,14 +57,14 @@ impl ConvBNActivationConfig {
 }
 
 #[derive(Module, Debug)]
-pub struct ConvBNActivation<B: Backend> {
-    conv: Conv2d<B>,
-    bn: BatchNorm<B>,
+pub struct ConvBNActivation {
+    conv: Conv2d,
+    bn: BatchNorm,
     activation: Activation,
 }
 
-impl<B: Backend> ConvBNActivation<B> {
-    pub fn forward(&self, input: Tensor<B, 4>) -> Tensor<B, 4> {
+impl ConvBNActivation {
+    pub fn forward(&self, input: Tensor<4>) -> Tensor<4> {
         let x = self.conv.forward(input);
         let x = self.bn.forward(x);
         return self.activation.forward(x);

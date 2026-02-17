@@ -6,7 +6,7 @@ use burn::{
         conv::{Conv2d, Conv2dConfig},
         interpolate::{Interpolate2dConfig, InterpolateMode},
     },
-    tensor::{backend::Backend, Tensor},
+    tensor::{Device, Tensor},
 };
 use mobilenetv3::MobileNetV3Arch;
 
@@ -17,24 +17,24 @@ pub struct FpnLiteConfig {
 }
 
 #[derive(Module, Debug)]
-pub struct FpnLite<B: Backend> {
+pub struct FpnLite {
     // lateral 1×1 projections
-    lateral_c3: Conv2d<B>,
-    lateral_c4: Conv2d<B>,
+    lateral_c3: Conv2d,
+    lateral_c4: Conv2d,
 
     // smoothing blocks
-    smooth_p3: DepthwiseSeparableBlock<B>,
-    smooth_p4: DepthwiseSeparableBlock<B>,
-    smooth_p5: DepthwiseSeparableBlock<B>,
-    smooth_p6: DepthwiseSeparableBlock<B>,
+    smooth_p3: DepthwiseSeparableBlock,
+    smooth_p4: DepthwiseSeparableBlock,
+    smooth_p5: DepthwiseSeparableBlock,
+    smooth_p6: DepthwiseSeparableBlock,
 
     // downsampling (stride‑2 depthwise)
-    downsample_p4: DepthwiseSeparableBlock<B>,
-    downsample_p5: DepthwiseSeparableBlock<B>,
+    downsample_p4: DepthwiseSeparableBlock,
+    downsample_p5: DepthwiseSeparableBlock,
 }
 
-impl<B: Backend> FpnLite<B> {
-    pub fn new(cfg: FpnLiteConfig, device: &B::Device) -> Self {
+impl FpnLite {
+    pub fn new(cfg: FpnLiteConfig, device: &Device) -> Self {
         let out = cfg.out_channels;
 
         let (c3_in, c4_in) = match cfg.backbone {
@@ -60,11 +60,7 @@ impl<B: Backend> FpnLite<B> {
         };
     }
 
-    pub fn forward(
-        &self,
-        c3: Tensor<B, 4>,
-        c4: Tensor<B, 4>,
-    ) -> [Tensor<B, 4>; 4] {
+    pub fn forward(&self, c3: Tensor<4>, c4: Tensor<4>) -> [Tensor<4>; 4] {
         let l3 = self.lateral_c3.forward(c3);
         let l4 = self.lateral_c4.forward(c4);
 
@@ -94,13 +90,12 @@ impl<B: Backend> FpnLite<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::{wgpu::WgpuDevice, Wgpu};
-    use burn::tensor::Tensor;
+    use burn::tensor::{Device, Tensor};
     use mobilenetv3::{MobileNetV3Arch, MobileNetV3Config};
 
     #[test]
     fn test_fpnlite_shapes_large() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let config = MobileNetV3Config::new();
         let backbone = config.init_large(&device); // large variant
@@ -109,22 +104,22 @@ mod tests {
         let fpnlite = FpnLite::new(cfg, &device);
 
         // fake input image
-        let x = Tensor::<Wgpu, 4>::zeros([1, 3, 320, 320], &device);
+        let x = Tensor::<4>::zeros([1, 3, 320, 320], &device);
 
         let (c3, c4) = backbone.forward_features(x);
 
         // run FPNLite
         let [p3, p4, p5, p6] = fpnlite.forward(c3, c4);
 
-        assert_eq!(p3.shape().dims, [1, 96, 20, 20]);
-        assert_eq!(p4.shape().dims, [1, 96, 10, 10]);
-        assert_eq!(p5.shape().dims, [1, 96, 5, 5]);
-        assert_eq!(p6.shape().dims, [1, 96, 3, 3]);
+        assert_eq!(p3.shape().as_slice(), [1, 96, 20, 20]);
+        assert_eq!(p4.shape().as_slice(), [1, 96, 10, 10]);
+        assert_eq!(p5.shape().as_slice(), [1, 96, 5, 5]);
+        assert_eq!(p6.shape().as_slice(), [1, 96, 3, 3]);
     }
 
     #[test]
     fn test_fpnlite_shapes_small() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let config = MobileNetV3Config::new();
         let backbone = config.init_small(&device); // small variant
@@ -133,26 +128,25 @@ mod tests {
         let fpnlite = FpnLite::new(cfg, &device);
 
         // fake input image
-        let x = Tensor::<Wgpu, 4>::zeros([1, 3, 320, 320], &device);
+        let x = Tensor::<4>::zeros([1, 3, 320, 320], &device);
 
         let (c3, c4) = backbone.forward_features(x);
 
         let [p3, p4, p5, p6] = fpnlite.forward(c3, c4);
 
         // expected shapes
-        assert_eq!(p3.shape().dims, [1, 96, 20, 20]);
-        assert_eq!(p4.shape().dims, [1, 96, 10, 10]);
-        assert_eq!(p5.shape().dims, [1, 96, 5, 5]);
-        assert_eq!(p6.shape().dims, [1, 96, 3, 3]);
+        assert_eq!(p3.shape().as_slice(), [1, 96, 20, 20]);
+        assert_eq!(p4.shape().as_slice(), [1, 96, 10, 10]);
+        assert_eq!(p5.shape().as_slice(), [1, 96, 5, 5]);
+        assert_eq!(p6.shape().as_slice(), [1, 96, 3, 3]);
     }
 
     #[test]
     fn test_fpnlite_backbone_channel_consistency() {
-        use burn::backend::{wgpu::Wgpu, wgpu::WgpuDevice};
-        use burn::tensor::Tensor;
+        use burn::tensor::{Device, Tensor};
         use mobilenetv3::{MobileNetV3Arch, MobileNetV3Config};
 
-        let device = WgpuDevice::default();
+        let device = Device::default();
         let config = MobileNetV3Config::new();
 
         // Helper closure to extract (c3_channels, c4_channels)
@@ -162,10 +156,10 @@ mod tests {
                 MobileNetV3Arch::Small => config.init_small(&device),
             };
 
-            let x = Tensor::<Wgpu, 4>::zeros([1, 3, 320, 320], &device);
+            let x = Tensor::<4>::zeros([1, 3, 320, 320], &device);
             let (c3, c4) = backbone.forward_features(x);
 
-            (c3.shape().dims[1], c4.shape().dims[1])
+            (c3.shape().as_slice()[1], c4.shape().as_slice()[1])
         };
 
         // Extract actual backbone outputs

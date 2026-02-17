@@ -3,7 +3,7 @@
 use crate::ops::nms::NmsOps;
 use burn::prelude::Int;
 use burn::tensor::activation::softmax;
-use burn::tensor::{backend::Backend, Tensor};
+use burn::tensor::Tensor;
 
 /// A final detection after post‑processing.
 #[derive(Debug, Clone)]
@@ -13,8 +13,8 @@ pub struct Detection {
     pub class: usize,
 }
 
-fn tensor_to_vec_f32<B: Backend, const D: usize>(
-    tensor: &Tensor<B, D>,
+fn tensor_to_vec_f32<const D: usize>(
+    tensor: &Tensor<D>,
 ) -> Result<Vec<f32>, String> {
     return tensor
         .clone()
@@ -23,8 +23,8 @@ fn tensor_to_vec_f32<B: Backend, const D: usize>(
         .map_err(|e| format!("Failed to extract f32 tensor data: {e}"));
 }
 
-fn tensor_to_vec_i32<B: Backend, const D: usize>(
-    tensor: &Tensor<B, D, Int>,
+fn tensor_to_vec_i32<const D: usize>(
+    tensor: &Tensor<D, Int>,
 ) -> Result<Vec<i32>, String> {
     return tensor
         .clone()
@@ -39,9 +39,9 @@ fn tensor_to_vec_i32<B: Backend, const D: usize>(
 /// - pick best class per anchor
 /// - filter by score threshold
 /// - run per‑class NMS
-pub fn ssd_postprocess<B: Backend>(
-    boxes: &Tensor<B, 2>, // [A, 4] decoded boxes (cx,cy,w,h)
-    class_logits: &Tensor<B, 2>, // [A, C] raw logits
+pub fn ssd_postprocess(
+    boxes: &Tensor<2>,        // [A, 4] decoded boxes (cx,cy,w,h)
+    class_logits: &Tensor<2>, // [A, C] raw logits
     score_threshold: f32,
     iou_threshold: f32,
     max_detections: usize,
@@ -115,12 +115,11 @@ pub fn ssd_postprocess<B: Backend>(
         let flat_boxes: Vec<f32> =
             class_boxes.iter().flatten().copied().collect();
 
-        let boxes_t =
-            Tensor::<B, 1>::from_floats(flat_boxes.as_slice(), &device)
-                .reshape([class_boxes.len(), 4]);
+        let boxes_t = Tensor::<1>::from_floats(flat_boxes.as_slice(), &device)
+            .reshape([class_boxes.len(), 4]);
 
         let scores_t =
-            Tensor::<B, 1>::from_floats(class_scores.as_slice(), &device);
+            Tensor::<1>::from_floats(class_scores.as_slice(), &device);
 
         // Run NMS
         let keep = NmsOps::nms_single_class(
@@ -146,15 +145,14 @@ pub fn ssd_postprocess<B: Backend>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::wgpu::{Wgpu, WgpuDevice};
-    use burn::tensor::Tensor;
+    use burn::tensor::{Device, Tensor};
 
     #[test]
     fn test_postprocess_basic_softmax_and_filtering() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         // 3 anchors, 3 classes (background + 2 real classes)
-        let logits = Tensor::<Wgpu, 2>::from_floats(
+        let logits = Tensor::<2>::from_floats(
             [
                 [0.0, 5.0, 1.0], // anchor 0 → class 1
                 [0.0, 0.1, 0.2], // anchor 1 → class 2 (but low score)
@@ -164,7 +162,7 @@ mod tests {
         );
 
         // Boxes (cx,cy,w,h)
-        let boxes = Tensor::<Wgpu, 2>::from_floats(
+        let boxes = Tensor::<2>::from_floats(
             [
                 [0.5, 0.5, 0.2, 0.2],
                 [0.2, 0.2, 0.2, 0.2],
@@ -187,10 +185,10 @@ mod tests {
 
     #[test]
     fn test_postprocess_per_class_nms() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         // Two anchors of class 1 that overlap heavily
-        let logits = Tensor::<Wgpu, 2>::from_floats(
+        let logits = Tensor::<2>::from_floats(
             [
                 [0.0, 5.0, 0.1], // class 1
                 [0.0, 4.0, 0.1], // class 1
@@ -199,7 +197,7 @@ mod tests {
             &device,
         );
 
-        let boxes = Tensor::<Wgpu, 2>::from_floats(
+        let boxes = Tensor::<2>::from_floats(
             [
                 [0.5, 0.5, 0.4, 0.4], // overlaps with box 1
                 [0.52, 0.52, 0.4, 0.4],
@@ -222,9 +220,9 @@ mod tests {
 
     #[test]
     fn test_postprocess_score_threshold() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
-        let logits = Tensor::<Wgpu, 2>::from_floats(
+        let logits = Tensor::<2>::from_floats(
             [
                 [0.0, 0.1, 0.2], // low scores
                 [0.0, 5.0, 0.1], // high score
@@ -232,7 +230,7 @@ mod tests {
             &device,
         );
 
-        let boxes = Tensor::<Wgpu, 2>::from_floats(
+        let boxes = Tensor::<2>::from_floats(
             [[0.1, 0.1, 0.2, 0.2], [0.5, 0.5, 0.2, 0.2]],
             &device,
         );
@@ -249,14 +247,14 @@ mod tests {
 
     #[test]
     fn test_postprocess_max_detections() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
-        let logits = Tensor::<Wgpu, 2>::from_floats(
+        let logits = Tensor::<2>::from_floats(
             [[0.0, 5.0, 0.1], [0.0, 4.0, 0.1], [0.0, 3.0, 0.1]],
             &device,
         );
 
-        let boxes = Tensor::<Wgpu, 2>::from_floats(
+        let boxes = Tensor::<2>::from_floats(
             [
                 [0.1, 0.1, 0.2, 0.2],
                 [0.2, 0.2, 0.2, 0.2],

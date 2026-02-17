@@ -1,8 +1,4 @@
-use burn::{
-    config::Config,
-    module::Module,
-    tensor::{backend::Backend, Tensor},
-};
+use burn::{config::Config, module::Module, tensor::Tensor};
 
 #[derive(Config, Debug)]
 pub struct IdentityConfig {}
@@ -13,14 +9,11 @@ impl IdentityConfig {
     }
 }
 
-#[derive(Module, Clone, Debug)]
+#[derive(Module, Debug)]
 pub struct Identity {}
 
 impl Identity {
-    pub fn forward<B: Backend, const D: usize>(
-        &self,
-        input: Tensor<B, D>,
-    ) -> Tensor<B, D> {
+    pub fn forward<const D: usize>(&self, input: Tensor<D>) -> Tensor<D> {
         return input;
     }
 }

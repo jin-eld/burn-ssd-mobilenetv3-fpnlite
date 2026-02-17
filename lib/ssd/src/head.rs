@@ -1,24 +1,24 @@
 use burn::{
     module::Module,
-    tensor::{backend::Backend, Tensor},
+    tensor::{Device, Tensor},
 };
 
 use fpnlite::block::DepthwiseSeparableBlock;
 
 #[derive(Module, Debug)]
-pub struct SSDLiteHead<B: Backend> {
-    cls_heads: Vec<DepthwiseSeparableBlock<B>>,
-    bbox_heads: Vec<DepthwiseSeparableBlock<B>>,
+pub struct SSDLiteHead {
+    cls_heads: Vec<DepthwiseSeparableBlock>,
+    bbox_heads: Vec<DepthwiseSeparableBlock>,
     num_anchors_per_level: Vec<usize>,
     num_classes: usize,
 }
 
-impl<B: Backend> SSDLiteHead<B> {
+impl SSDLiteHead {
     pub fn new(
         in_channels: &[usize],           // one per FPN level
         num_anchors_per_level: &[usize], // one per FPN level
         num_classes: usize,
-        device: &B::Device,
+        device: &Device,
     ) -> Self {
         assert_eq!(
             in_channels.len(),
@@ -51,8 +51,8 @@ impl<B: Backend> SSDLiteHead<B> {
 
     pub fn forward(
         &self,
-        feats: &[Tensor<B, 4>], // [N, C, H, W] per FPN level
-    ) -> (Tensor<B, 3>, Tensor<B, 3>) {
+        feats: &[Tensor<4>], // [N, C, H, W] per FPN level
+    ) -> (Tensor<3>, Tensor<3>) {
         let mut cls_all = Vec::new();
         let mut bbox_all = Vec::new();
 
@@ -63,7 +63,7 @@ impl<B: Backend> SSDLiteHead<B> {
             let bbox = self.bbox_heads[i].forward(feat.clone());
 
             let shape = cls.shape();
-            let dims = shape.dims.as_slice();
+            let dims = shape.as_slice();
             let n = dims[0];
             let h = dims[2];
             let w = dims[3];
@@ -94,17 +94,17 @@ impl<B: Backend> SSDLiteHead<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use burn::backend::{wgpu::WgpuDevice, Wgpu};
+    use burn::tensor::Device;
 
     #[test]
     fn test_ssdlite_head_shapes() {
-        let device = WgpuDevice::default();
+        let device = Device::default();
 
         let in_channels = [96, 96, 96, 96];
         let num_anchors_per_level = [3, 6, 6, 6]; // TFLite-style
         let num_classes = 91;
 
-        let head = SSDLiteHead::<Wgpu>::new(
+        let head = SSDLiteHead::new(
             &in_channels,
             &num_anchors_per_level,
             num_classes,
@@ -112,17 +112,17 @@ mod tests {
         );
 
         let feats = [
-            Tensor::<Wgpu, 4>::zeros([1, 96, 20, 20], &device),
-            Tensor::<Wgpu, 4>::zeros([1, 96, 10, 10], &device),
-            Tensor::<Wgpu, 4>::zeros([1, 96, 5, 5], &device),
-            Tensor::<Wgpu, 4>::zeros([1, 96, 3, 3], &device),
+            Tensor::<4>::zeros([1, 96, 20, 20], &device),
+            Tensor::<4>::zeros([1, 96, 10, 10], &device),
+            Tensor::<4>::zeros([1, 96, 5, 5], &device),
+            Tensor::<4>::zeros([1, 96, 3, 3], &device),
         ];
 
         let (cls, bbox) = head.forward(&feats);
 
         let total_anchors = 20 * 20 * 3 + 10 * 10 * 6 + 5 * 5 * 6 + 3 * 3 * 6;
 
-        assert_eq!(cls.shape().dims, [1, total_anchors, num_classes]);
-        assert_eq!(bbox.shape().dims, [1, total_anchors, 4]);
+        assert_eq!(cls.shape().as_slice(), [1, total_anchors, num_classes]);
+        assert_eq!(bbox.shape().as_slice(), [1, total_anchors, 4]);
     }
 }
