@@ -19,7 +19,7 @@ use burn::{
 use {
     super::weights::{self, WeightsMeta},
     burn::record::{FullPrecisionSettings, Recorder, RecorderError},
-    burn_import::pytorch::{LoadArgs, PyTorchFileRecorder},
+    burn_store::{KeyRemapper, ModuleSnapshot, PytorchStore},
 };
 
 #[derive(Module, Debug)]
@@ -194,54 +194,52 @@ fn mobilenet_v3_conf(
 }
 
 #[cfg(feature = "pretrained")]
-fn load_weights_record<B: Backend>(
-    weights: &weights::Weights,
-    device: &Device<B>,
-) -> Result<MobileNetV3Record<B>, RecorderError> {
-    let torch_weights = weights.download().map_err(|err| {
-        RecorderError::Unknown(format!(
-            "Could not download weights.\nError: {err}"
-        ))
-    })?;
+fn load_weights(weights: &weights::Weights) -> Result<PytorchStore, String> {
+    let torch_weights = weights
+        .download()
+        .map_err(|err| format!("Could not download weights: {}", err))?;
 
-    let load_args = LoadArgs::new(torch_weights)
+    let store = PytorchStore::from_file(torch_weights)
+        //    .with_top_level_key("state_dict") // if needed
+        .allow_partial(true) // optional, but helpful
+        .skip_enum_variants(true)
         // Initial Conv and BatchNorm layers
-        .with_key_remap("features\\.0\\.0\\.(.+)", "features.0.conv.$1")
-        .with_key_remap("features\\.0\\.1\\.(.+)", "features.0.bn.$1")
+        .with_key_remapping("features\\.0\\.0\\.(.+)", "features.0.conv.$1")
+        .with_key_remapping("features\\.0\\.1\\.(.+)", "features.0.bn.$1")
         // Feature layer 1 does not have an expand conv (only layers 2-15)
         // So we only deal with the depthwise -> project convolutions
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.1\\.block\\.0\\.0\\.(.+)",
             "features.1.depthwise_conv.conv.$1",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.1\\.block\\.0\\.1\\.(.+)",
             "features.1.depthwise_conv.bn.$1",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.1\\.block\\.1\\.0\\.(.+)",
             "features.1.project_conv.conv.$1",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.1\\.block\\.1\\.1\\.(.+)",
             "features.1.project_conv.bn.$1",
         )
         // Feature layers 2-15 below
         // Inverted Residual Blocks - Expand Conv
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([2-9]|1[0-5])\\.block\\.0\\.0\\.(.+)",
             "features.$1.expand_conv.conv.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([2-9]|1[0-5])\\.block\\.0\\.1\\.(.+)",
             "features.$1.expand_conv.bn.$2",
         )
         // Inverted Residual Blocks - Depthwise Conv
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([2-9]|1[0-5])\\.block\\.1\\.0\\.(.+)",
             "features.$1.depthwise_conv.conv.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([2-9]|1[0-5])\\.block\\.1\\.1\\.(.+)",
             "features.$1.depthwise_conv.bn.$2",
         )
@@ -249,44 +247,43 @@ fn load_weights_record<B: Backend>(
         // but block.3 otherwise
         // For large, se_layer is present in features.[4,5,6,11,12,13,14,15]
         // Squeeze and Excitation layers
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.(1[0-6]|[1-9])\\.block\\.2\\.fc1\\.(.+)",
             "features.$1.se_layer.fc1.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.(1[0-6]|[1-9])\\.block\\.2\\.fc2\\.(.+)",
             "features.$1.se_layer.fc2.$2",
         )
         // When se_layer is not present, project_conv is in block.2
         // So for features.[1,2,3,7,8,9,10] it will be in block.2
         // Inverted Residual Blocks - Project Conv
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([1-3]|[7-9]|10)\\.block\\.2\\.0\\.(.+)",
             "features.$1.project_conv.conv.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([1-3]|[7-9]|10)\\.block\\.2\\.1\\.(.+)",
             "features.$1.project_conv.bn.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([4-6]|1[1-5])\\.block\\.3\\.0\\.(.+)",
             "features.$1.project_conv.conv.$2",
         )
-        .with_key_remap(
+        .with_key_remapping(
             "features\\.([4-6]|1[1-5])\\.block\\.3\\.1\\.(.+)",
             "features.$1.project_conv.bn.$2",
         )
         // Last Conv Layer
-        .with_key_remap("features\\.16\\.0\\.(.+)", "features.16.conv.$1")
-        .with_key_remap("features\\.16\\.1\\.(.+)", "features.16.bn.$1")
+        .with_key_remapping("features\\.16\\.0\\.(.+)", "features.16.conv.$1")
+        .with_key_remapping("features\\.16\\.1\\.(.+)", "features.16.bn.$1")
         // Classifier
-        .with_key_remap("classifier\\.0\\.(.+)", "classifier.fc1.$1")
-        .with_key_remap("classifier\\.3\\.(.+)", "classifier.fc2.$1");
+        .with_key_remapping("classifier\\.0\\.(.+)", "classifier.fc1.$1")
+        .with_key_remapping("classifier\\.3\\.(.+)", "classifier.fc2.$1");
 
-    let record = PyTorchFileRecorder::<FullPrecisionSettings>::new()
-        .load(load_args, device)?;
-    Ok(record)
+    return Ok(store);
 }
+
 #[derive(Config, Debug)]
 pub struct MobileNetV3Config {
     #[config(default = "1000")]
@@ -387,9 +384,9 @@ impl MobileNetV3PretrainedConfig {
     pub fn init<B: Backend>(
         &self,
         device: &Device<B>,
-    ) -> Result<MobileNetV3<B>, RecorderError> {
+    ) -> Result<(MobileNetV3<B>, PytorchStore), String> {
         let weights = self.weights_type.weights();
-        let record = load_weights_record(&weights, device)?;
+        let store = load_weights(&weights)?;
 
         let config =
             MobileNetV3Config::new().with_num_classes(weights.num_classes);
@@ -397,10 +394,9 @@ impl MobileNetV3PretrainedConfig {
         let model = match self.weights_type {
             weights::MobileNetV3::PyTorchLarge => config.init_large(device),
             weights::MobileNetV3::PyTorchSmall => config.init_small(device),
-        }
-        .load_record(record);
+        };
 
-        return Ok(model);
+        return Ok((model, store));
     }
 }
 
@@ -419,7 +415,7 @@ impl<B: Backend> MobileNetV3<B> {
         }
         x = self.avgpool.forward(x);
 
-        let batch_size = x.shape().dims[0];
+        let batch_size = x.shape().as_slice()[0];
         let num_elements = x.shape().num_elements() / batch_size;
         let reshaped = x.reshape([batch_size, num_elements]);
 
@@ -436,7 +432,7 @@ impl<B: Backend> MobileNetV3<B> {
         let mut c4 = None;
 
         // Track previous height to detect downsampling
-        let mut prev_h = x.shape().dims[2];
+        let mut prev_h = x.shape().as_slice()[2];
         let mut current_stride = 1;
 
         for layer in self.features.iter() {
@@ -444,7 +440,7 @@ impl<B: Backend> MobileNetV3<B> {
             x = layer.forward(x);
 
             // Current spatial size
-            let shape = x.shape().dims;
+            let shape = x.shape().to_vec();
             let h = shape[2];
 
             // Detect downsampling: height reduction => stride *= 2

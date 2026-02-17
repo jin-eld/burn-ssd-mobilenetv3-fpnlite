@@ -41,7 +41,7 @@ impl<B: Backend> DepthwiseSeparableBlock<B> {
     ) -> Self {
         let depthwise = Conv2dConfig::new([in_channels, in_channels], [3, 3])
             .with_stride([stride, stride])
-            .with_padding(PaddingConfig2d::Explicit(1, 1))
+            .with_padding(PaddingConfig2d::Explicit(1, 1, 1, 1))
             .with_groups(in_channels)
             .init(device);
 

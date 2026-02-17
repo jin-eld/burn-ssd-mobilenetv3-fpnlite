@@ -116,10 +116,10 @@ mod tests {
         // run FPNLite
         let [p3, p4, p5, p6] = fpnlite.forward(c3, c4);
 
-        assert_eq!(p3.shape().dims, [1, 96, 20, 20]);
-        assert_eq!(p4.shape().dims, [1, 96, 10, 10]);
-        assert_eq!(p5.shape().dims, [1, 96, 5, 5]);
-        assert_eq!(p6.shape().dims, [1, 96, 3, 3]);
+        assert_eq!(p3.shape().as_slice(), [1, 96, 20, 20]);
+        assert_eq!(p4.shape().as_slice(), [1, 96, 10, 10]);
+        assert_eq!(p5.shape().as_slice(), [1, 96, 5, 5]);
+        assert_eq!(p6.shape().as_slice(), [1, 96, 3, 3]);
     }
 
     #[test]
@@ -140,10 +140,10 @@ mod tests {
         let [p3, p4, p5, p6] = fpnlite.forward(c3, c4);
 
         // expected shapes
-        assert_eq!(p3.shape().dims, [1, 96, 20, 20]);
-        assert_eq!(p4.shape().dims, [1, 96, 10, 10]);
-        assert_eq!(p5.shape().dims, [1, 96, 5, 5]);
-        assert_eq!(p6.shape().dims, [1, 96, 3, 3]);
+        assert_eq!(p3.shape().as_slice(), [1, 96, 20, 20]);
+        assert_eq!(p4.shape().as_slice(), [1, 96, 10, 10]);
+        assert_eq!(p5.shape().as_slice(), [1, 96, 5, 5]);
+        assert_eq!(p6.shape().as_slice(), [1, 96, 3, 3]);
     }
 
     #[test]
@@ -165,7 +165,7 @@ mod tests {
             let x = Tensor::<Wgpu, 4>::zeros([1, 3, 320, 320], &device);
             let (c3, c4) = backbone.forward_features(x);
 
-            (c3.shape().dims[1], c4.shape().dims[1])
+            (c3.shape().as_slice()[1], c4.shape().as_slice()[1])
         };
 
         // Extract actual backbone outputs

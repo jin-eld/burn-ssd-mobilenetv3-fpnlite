@@ -5,6 +5,7 @@ use burn::tensor::{
     activation::softmax, backend::Backend, cast::ToElement, Tensor,
 };
 use mobilenetv3::imagenet::{Normalizer, CLASSES, IMAGE_SIZE};
+use mobilenetv3::MobileNetV3Config;
 use std::process;
 use transforms;
 
@@ -71,6 +72,7 @@ fn main() {
     let device = WgpuDevice::default();
     let model: mobilenetv3::MobileNetV3<MyBackend>;
 
+    /*
     #[cfg(feature = "pretrained")]
     {
         let weights = match args.model_type.as_deref() {
@@ -89,9 +91,16 @@ fn main() {
                 eprintln!("Failed to load model: {}", e);
                 std::process::exit(1);
             });
+
+        /*
+        model
+            .load_from(&mut store)
+            .expect("Failed to load PyTorch model weights");
+            */
     }
 
-    #[cfg(not(feature = "pretrained"))]
+    #[cfg(not(feature = "pretrained"))]a
+    */
     {
         println!(
             "Warning, you are using an empty model, dev testing use case only!"

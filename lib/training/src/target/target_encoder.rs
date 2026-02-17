@@ -83,7 +83,7 @@ mod tests {
         let data = t.to_data();
         let flat = data.to_vec::<i32>().unwrap();
         let shape = t.shape();
-        let cols = shape.dims[1];
+        let cols = shape.as_slice()[1];
 
         flat.chunks(cols).map(|c| c.to_vec()).collect()
     }
@@ -92,8 +92,8 @@ mod tests {
         let data = t.to_data();
         let flat = data.to_vec::<f32>().unwrap();
         let shape = t.shape();
-        let batch = shape.dims[0];
-        let anchors = shape.dims[1];
+        let batch = shape.as_slice()[0];
+        let anchors = shape.as_slice()[1];
 
         let mut out = Vec::new();
         let mut idx = 0;

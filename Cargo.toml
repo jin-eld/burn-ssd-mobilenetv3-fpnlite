@@ -19,13 +19,16 @@ readme = "README.md"
 publish = false
 
 [workspace.dependencies]
-burn = { version = "0.20", features = ["train", "wgpu"] }
-burn-import = "0.20"
-burn-dataset = { version = "0.20", features = ["vision"] }
+#burn = { path = "../burn/crates/burn", features = ["train", "wgpu"] }
+burn = { git = "https://github.com/tracel-ai/burn.git", branch = "main", features = ["train", "wgpu"] }
+#burn-store = { path = "../burn/crates/burn-store"  }
+burn-store = { git = "https://github.com/tracel-ai/burn.git", branch = "main", package = "burn-store" }
+#burn-dataset = { path = "../burn/crates/burn-dataset", features = ["vision"] }
+burn-dataset = { git = "https://github.com/tracel-ai/burn.git", branch = "main", features = ["vision"] }
 image = { version = "0.25.5", features = [ "png", "jpeg" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-zip = "=7.2.0"
+zip = "=8.1.0"
 
 fpnlite = { path = "lib/fpnlite" }
 mobilenetv3 = { path = "lib/mobilenetv3" }

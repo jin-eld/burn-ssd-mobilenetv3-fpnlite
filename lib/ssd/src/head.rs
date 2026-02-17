@@ -63,7 +63,7 @@ impl<B: Backend> SSDLiteHead<B> {
             let bbox = self.bbox_heads[i].forward(feat.clone());
 
             let shape = cls.shape();
-            let dims = shape.dims.as_slice();
+            let dims = shape.as_slice();
             let n = dims[0];
             let h = dims[2];
             let w = dims[3];
@@ -122,7 +122,7 @@ mod tests {
 
         let total_anchors = 20 * 20 * 3 + 10 * 10 * 6 + 5 * 5 * 6 + 3 * 3 * 6;
 
-        assert_eq!(cls.shape().dims, [1, total_anchors, num_classes]);
-        assert_eq!(bbox.shape().dims, [1, total_anchors, 4]);
+        assert_eq!(cls.shape().as_slice(), [1, total_anchors, num_classes]);
+        assert_eq!(bbox.shape().as_slice(), [1, total_anchors, 4]);
     }
 }
