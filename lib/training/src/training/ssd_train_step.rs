@@ -19,8 +19,6 @@ pub struct SSDTrainModel {
     pub encoder: SSDTargetEncoder,
     #[module(skip)]
     pub loss_fn: SSDLoss,
-    #[module(skip)]
-    pub device: Device,
 }
 
 pub trait SSDTraining {
@@ -30,7 +28,6 @@ pub trait SSDTraining {
         anchors: &Vec<[f32; 4]>,
         encoder: &SSDTargetEncoder,
         loss_fn: &SSDLoss,
-        device: &Device,
     ) -> SSDOutput;
 }
 
@@ -41,19 +38,21 @@ impl SSDTraining for SSDLiteMobileNetV3 {
         anchors: &Vec<[f32; 4]>,
         encoder: &SSDTargetEncoder,
         loss_fn: &SSDLoss,
-        device: &Device,
     ) -> SSDOutput {
+        let device = batch.images.device();
+
         // raw head outputs: logits + deltas
         let (pred_logits, pred_deltas) = self.forward_raw(batch.images);
 
         // decode deltas -> boxes using training anchors
-        let anchors_tensor = anchors_to_tensor(anchors, device);
+        let anchors_tensor = anchors_to_tensor(anchors, &device);
+
         let pred_boxes =
             self.decoder().decode(pred_deltas.clone(), anchors_tensor);
 
         // encode targets
         let (tgt_classes, tgt_boxes, pos_mask) =
-            encoder.encode_batch(anchors, batch.boxes, batch.labels, device);
+            encoder.encode_batch(anchors, batch.boxes, batch.labels, &device);
 
         // compute loss on decoded boxes
         let (loss_total, loss_cls, loss_reg) = loss_fn.forward(
@@ -90,7 +89,6 @@ where
             &self.anchors,
             &self.encoder,
             &self.loss_fn,
-            &self.device,
         );
 
         let raw_grads = out.loss.backward();
@@ -113,7 +111,6 @@ where
             &self.anchors,
             &self.encoder,
             &self.loss_fn,
-            &self.device,
         );
     }
 }

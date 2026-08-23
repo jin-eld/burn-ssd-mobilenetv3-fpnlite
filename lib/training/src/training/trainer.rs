@@ -78,7 +78,6 @@ pub fn train(
         anchors: anchors,
         encoder: encoder,
         loss_fn: loss_fn,
-        device: device.clone(),
     };
 
     let optim = AdamConfig::new().init();

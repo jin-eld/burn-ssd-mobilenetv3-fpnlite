@@ -95,7 +95,6 @@ fn training_test_forward_backward() {
         anchors: anchors,
         encoder: encoder,
         loss_fn: loss_fn,
-        device: device.clone(),
     };
 
     // TrainStep::step -> TrainOutput<SSDOutput>
@@ -142,7 +141,6 @@ fn training_test_optimizer_step() {
         anchors: anchors,
         encoder: encoder,
         loss_fn: loss_fn,
-        device: device.clone(),
     };
 
     let optim = AdamConfig::new().init();
