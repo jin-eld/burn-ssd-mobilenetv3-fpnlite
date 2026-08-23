@@ -19,6 +19,7 @@ readme = "README.md"
 publish = false
 
 [workspace.dependencies]
+argh = "0.1"
 burn = { version = "0.22.0-pre.2", features = ["train", "wgpu", "vulkan"] }
 burn-dispatch = { version = "0.22.0-pre.2" }
 burn-store = { version = "0.22.0-pre.2", package = "burn-store", features = ["pytorch"] }
@@ -32,3 +33,4 @@ fpnlite = { path = "lib/fpnlite" }
 mobilenetv3 = { path = "lib/mobilenetv3" }
 ssd = { path = "lib/ssd" }
 transforms = { path = "lib/transforms" }
+training = { path = "lib/training" }

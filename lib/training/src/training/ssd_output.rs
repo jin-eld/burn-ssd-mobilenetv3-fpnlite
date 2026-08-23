@@ -1,5 +1,8 @@
 use burn::tensor::{Float, Int, Tensor};
-use burn::train::ItemLazy;
+use burn::train::{
+    metric::{Adaptor, LossInput},
+    ItemLazy,
+};
 
 pub struct SSDOutput {
     pub loss: Tensor<1, Float>,
@@ -14,7 +17,13 @@ pub struct SSDOutput {
 
 impl ItemLazy for SSDOutput {
     fn sync(self) -> Self {
-        self
+        return self;
+    }
+}
+
+impl Adaptor<LossInput> for SSDOutput {
+    fn adapt(&self) -> LossInput {
+        return LossInput::new(self.loss.clone());
     }
 }
 
