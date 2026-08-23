@@ -23,7 +23,7 @@ fn test_ssd_full_pipeline() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320);
     let num_classes = dataset.num_classes();
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
@@ -71,7 +71,7 @@ fn training_test_forward_backward() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320);
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(1)
@@ -119,7 +119,7 @@ fn training_test_optimizer_step() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, device.clone());
+    let dataset = SSDDataset::new(coco, 320, 320);
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(1)
         .set_device(device.clone())

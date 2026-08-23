@@ -2,37 +2,28 @@ use burn::data::dataset::vision::{
     Annotation, BoundingBox, ImageDatasetItem, ImageFolderDataset,
 };
 use burn::data::dataset::{Dataset, DatasetError};
-use burn::tensor::{Device, Tensor};
-use transforms::{
-    coco_to_cxcywh_normalized, img_resize_ssd, img_to_tensor, scale_coco_boxes,
-};
+use burn::tensor::{Shape, TensorData};
+use transforms::{coco_to_cxcywh_normalized, img_resize_ssd, scale_coco_boxes};
 
 #[derive(Clone, Debug)]
 pub struct SSDSample {
-    pub image: Tensor<3>,     // [C, H, W]
-    pub boxes: Vec<[f32; 4]>, // normalized cxcywh
-    pub labels: Vec<usize>,   // class ids
+    pub image_data: TensorData, // [H, W, C] U8
+    pub boxes: Vec<[f32; 4]>,   // normalized cxcywh
+    pub labels: Vec<usize>,     // class ids
 }
 
 pub struct SSDDataset {
     inner: ImageFolderDataset,
     input_w: u32,
     input_h: u32,
-    device: Device,
 }
 
 impl SSDDataset {
-    pub fn new(
-        inner: ImageFolderDataset,
-        input_w: u32,
-        input_h: u32,
-        device: Device,
-    ) -> Self {
+    pub fn new(inner: ImageFolderDataset, input_w: u32, input_h: u32) -> Self {
         return Self {
             inner,
             input_w,
             input_h,
-            device,
         };
     }
 }
@@ -95,11 +86,16 @@ impl Dataset<SSDSample> for SSDDataset {
             self.input_h as f32,
         );
 
-        // convert resized image to tensor
-        let image = img_to_tensor(resized, &self.device);
+        // extract raw pixels as Vec<u8> for device-agnostic batching
+        let rgb_img = resized.to_rgb8();
+        let raw_pixels = rgb_img.into_raw();
+        let image_data = TensorData::new(
+            raw_pixels,
+            Shape::new([self.input_h as usize, self.input_w as usize, 3]),
+        );
 
         return Ok(SSDSample {
-            image,
+            image_data,
             boxes,
             labels,
         });
@@ -157,7 +153,7 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320, Default::default());
+        let dataset = SSDDataset::new(coco, 320, 320);
 
         // Find an image with no boxes
         let sample_result =
@@ -187,12 +183,12 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320, Default::default());
+        let dataset = SSDDataset::new(coco, 320, 320);
 
         let sample = dataset.get(0).expect("sample should exist");
 
-        // image shape
-        assert_eq!(sample.image.dims(), [3, 320, 320]);
+        // image data shape is [H, W, C] before the batcher permutes it
+        assert_eq!(sample.image_data.shape.dims(), [320, 320, 3]);
 
         // boxes normalized
         for b in &sample.boxes {

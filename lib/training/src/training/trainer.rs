@@ -44,14 +44,8 @@ pub fn train(
             format!("Failed to load COCO dataset (validation): {}", e)
         })?;
 
-    let device_train = device.clone();
-    let device_valid = device.clone();
-
-    let dataset_train =
-        SSDDataset::new(inner_train, input_w, input_h, device_train);
-
-    let dataset_valid =
-        SSDDataset::new(inner_valid, input_w, input_h, device_valid);
+    let dataset_train = SSDDataset::new(inner_train, input_w, input_h);
+    let dataset_valid = SSDDataset::new(inner_valid, input_w, input_h);
 
     let num_classes = dataset_train.num_classes();
 
