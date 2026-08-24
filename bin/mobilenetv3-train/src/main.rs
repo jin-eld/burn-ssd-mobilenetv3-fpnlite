@@ -27,6 +27,10 @@ struct Args {
     /// save training output (checkpoints, logs, etc) to this directory
     #[argh(option, default = "String::from(\"training-output\")")]
     output: String,
+
+    /// resume training from the latest checkpoint in the output directory
+    #[argh(switch)]
+    resume: bool,
 }
 
 fn main() {
@@ -41,6 +45,7 @@ fn main() {
         args.batch_size,
         args.seed,
         &args.output,
+        args.resume,
         &device,
     ) {
         eprintln!("{}", e);
