@@ -6,10 +6,17 @@ SSD MobileNet FPNLite 320x320 model with an export possibility to TFLite for
 final inference on the Coral Edge TPU.
 
 ## Current Status
-* implemented MobileNet V3 inference
+* implemented SSD-MobilenetV3-FPNLite inference
 * import of Pytorch `.pth` weights for MobileNetV3 "large" and "small"
+* implemented training (for now single GPU, targetting Vulkan/WGPU)
+
+### Missing
+* training data augmentation
+* multi GPU support
 
 ## Running
+
+### Inference
 
 There is a mobilenetv3-cli utility for testing the current code.
 ```
@@ -30,3 +37,32 @@ Options:
 Running the cli utility without the `pretrained` feature will use an
 empty model, which is only handy during development, but has no real value
 otherwise.
+
+### Training
+
+There is a separate command line utility for training:
+
+```
+Usage: mobilenetv3-train --coco-json <coco-json> --coco-images <coco-images>
+                        [--epochs <epochs>] [--batch-size <batch-size>]
+                        [--seed <seed>] [--output <output>] [--resume]
+
+Options:
+  --coco-json       path to the COCO-format JSON annotation file
+  --coco-images     path to the directory containing the training images
+  --epochs          number of training epochs
+  --batch-size      batch size for training and validation
+  --seed            random seed for data loader shuffling
+  --output          save training output (checkpoints, logs, etc) to this
+                    directory
+  --resume          resume training from the latest checkpoint in the output
+                    directory
+  --help, help      display usage information
+```
+
+Example:
+```
+cargo run --release --bin mobilenetv3-train -- \
+          --coco-json /path/to/coco/labels.json \
+          --coco-images /path/to/coco/imagedata
+```
