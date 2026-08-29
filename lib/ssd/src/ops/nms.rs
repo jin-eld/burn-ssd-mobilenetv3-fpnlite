@@ -14,8 +14,9 @@ impl NmsOps {
         max_detections: usize,
     ) -> Vec<usize> {
         // Move to CPU for now.
-        let boxes_data = boxes.clone().into_data().to_vec::<f32>().unwrap();
-        let scores_data = scores.clone().into_data().to_vec::<f32>().unwrap();
+        let boxes_data = boxes.clone().into_data().try_to_vec::<f32>().unwrap();
+        let scores_data =
+            scores.clone().into_data().try_to_vec::<f32>().unwrap();
 
         let num_boxes = scores_data.len();
 

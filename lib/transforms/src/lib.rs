@@ -65,7 +65,7 @@ pub fn tensor_to_img(
     let tensor = tensor.permute([1, 2, 0]);
 
     // Convert to u8 and save the image
-    let data: Vec<f32> = tensor.into_data().to_vec().unwrap();
+    let data: Vec<f32> = tensor.into_data().try_to_vec::<f32>().unwrap();
     let data_u8: Vec<u8> = data
         .iter()
         .map(|&x| (x * 255.0).min(255.0).max(0.0) as u8)

@@ -5,7 +5,8 @@ members = [
     "lib/ssd",
     "lib/transforms",
     "lib/training",
-    "bin/mobilenetv3-cli"
+    "bin/mobilenetv3-cli",
+    "bin/mobilenetv3-train"
 ]
 
 resolver = "3"
@@ -20,10 +21,10 @@ publish = false
 
 [workspace.dependencies]
 argh = "0.1"
-burn = { version = "0.22.0-pre.2", features = ["train", "wgpu", "vulkan"] }
-burn-dispatch = { version = "0.22.0-pre.2" }
-burn-store = { version = "0.22.0-pre.2", package = "burn-store", features = ["pytorch"] }
-burn-dataset = { version = "0.22.0-pre.2", features = ["vision"] }
+burn = { version = "0.22.0-pre.3", features = ["train", "wgpu", "vulkan", "tui"] }
+burn-dispatch = { version = "0.22.0-pre.3", features = ["wgpu", "vulkan"] }
+burn-store = { version = "0.22.0-pre.3", package = "burn-store", features = ["pytorch"] }
+burn-dataset = { version = "0.22.0-pre.3", features = ["vision"] }
 image = { version = "0.25", features = [ "png", "jpeg" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

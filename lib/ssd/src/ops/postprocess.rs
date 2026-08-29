@@ -19,7 +19,7 @@ fn tensor_to_vec_f32<const D: usize>(
     return tensor
         .clone()
         .into_data()
-        .to_vec::<f32>()
+        .try_to_vec::<f32>()
         .map_err(|e| format!("Failed to extract f32 tensor data: {e}"));
 }
 
@@ -29,7 +29,7 @@ fn tensor_to_vec_i32<const D: usize>(
     return tensor
         .clone()
         .into_data()
-        .to_vec::<i32>()
+        .try_to_vec::<i32>()
         .map_err(|e| format!("Failed to extract i32 tensor data: {e}"));
 }
 
