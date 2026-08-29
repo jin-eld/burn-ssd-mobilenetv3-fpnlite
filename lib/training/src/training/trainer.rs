@@ -184,8 +184,8 @@ pub fn train(
 
     let mut training =
         SupervisedTraining::new(output, train_loader, valid_loader)
-            .metric_train(LossMetric::new())
-            .metric_valid(LossMetric::new())
+            .metric_train_numeric(LossMetric::new())
+            .metric_valid_numeric(LossMetric::new())
             .num_epochs(epochs)
             .with_default_checkpointers();
 
