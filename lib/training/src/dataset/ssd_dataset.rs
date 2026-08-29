@@ -49,11 +49,36 @@ impl Dataset<SSDSample> for SSDDataset {
 
         let w = item.image_width as u32;
         let h = item.image_height as u32;
+        let num_pixels = (w * h) as usize;
 
-        // build DynamicImage
-        let rgb_img = image::RgbImage::from_raw(w, h, pixels_u8)
-            .expect("invalid image buffer size");
-        let dyn_img = image::DynamicImage::ImageRgb8(rgb_img);
+        // build DynamicImage, handling Grayscale (1-channel),
+        // RGB (3-channel), and RGBA (4-channel)
+        let dyn_img = match pixels_u8.len() {
+            len if len == num_pixels => {
+                let gray_img = image::GrayImage::from_raw(w, h, pixels_u8)
+                    .expect("invalid grayscale image buffer size");
+                image::DynamicImage::ImageLuma8(gray_img).to_rgb8().into()
+            }
+            len if len == num_pixels * 3 => {
+                let rgb_img = image::RgbImage::from_raw(w, h, pixels_u8)
+                    .expect("invalid RGB image buffer size");
+                image::DynamicImage::ImageRgb8(rgb_img)
+            }
+            len if len == num_pixels * 4 => {
+                let rgba_img = image::RgbaImage::from_raw(w, h, pixels_u8)
+                    .expect("invalid RGBA image buffer size");
+                image::DynamicImage::ImageRgba8(rgba_img).to_rgb8().into()
+            }
+            _ => panic!(
+                "Unexpected pixel data length {} for {}x{} image (expected {}, {}, or {})",
+                pixels_u8.len(),
+                w,
+                h,
+                num_pixels,
+                num_pixels * 3,
+                num_pixels * 4
+            ),
+        };
 
         // extract boxes + labels from annotation
         let (mut boxes, labels): (Vec<[f32; 4]>, Vec<usize>) = match item
