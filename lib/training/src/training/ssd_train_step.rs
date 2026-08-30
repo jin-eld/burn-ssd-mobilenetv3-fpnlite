@@ -54,10 +54,11 @@ impl SSDTraining for SSDLiteMobileNetV3 {
         let (tgt_classes, tgt_boxes, pos_mask) =
             encoder.encode_batch(anchors, batch.boxes, batch.labels, &device);
 
-        // compute loss on decoded boxes
+        // regression loss lives in delta space: raw head output vs
+        // encoded targets
         let (loss_total, loss_cls, loss_reg) = loss_fn.forward(
             pred_logits.clone(),
-            pred_boxes.clone(),
+            pred_deltas.clone(),
             tgt_classes.clone(),
             tgt_boxes.clone(),
             pos_mask.clone(),

@@ -15,6 +15,10 @@ use ssd::ops::iou::iou_matrix;
 pub struct Matcher {
     pub positive_iou_threshold: f32,
     pub negative_iou_threshold: f32,
+    /// Variance for center deltas; must match the decoder's center_variance.
+    pub center_variance: f32,
+    /// Variance for size deltas; must match the decoder's size_variance.
+    pub size_variance: f32,
 }
 
 impl Matcher {
@@ -22,6 +26,8 @@ impl Matcher {
         return Self {
             positive_iou_threshold: pos,
             negative_iou_threshold: neg,
+            center_variance: 0.1,
+            size_variance: 0.2,
         };
     }
 
@@ -101,7 +107,12 @@ impl Matcher {
         for a in 0..num_anchors {
             if labels[a] > 0 {
                 let g = best_gt_for_anchor[a];
-                encoded[a] = encode_ssd_box(anchors[a], gt_boxes[g]);
+                encoded[a] = encode_ssd_box(
+                    anchors[a],
+                    gt_boxes[g],
+                    self.center_variance,
+                    self.size_variance,
+                );
             }
         }
 
@@ -109,20 +120,24 @@ impl Matcher {
     }
 }
 
-/// SSD box encoding:
-/// tx = (gx - ax) / aw
-/// ty = (gy - ay) / ah
-/// tw = log(gw / aw)
-/// th = log(gh / ah)
-fn encode_ssd_box(anchor: [f32; 4], gt: [f32; 4]) -> [f32; 4] {
+/// SSD box encoding (exact inverse of the decoder):
+/// tx = (gx - ax) / (aw * center_variance)
+/// ty = (gy - ay) / (ah * center_variance)
+/// tw = log(gw / aw) / size_variance
+/// th = log(gh / ah) / size_variance
+fn encode_ssd_box(
+    anchor: [f32; 4],
+    gt: [f32; 4],
+    center_variance: f32,
+    size_variance: f32,
+) -> [f32; 4] {
     let (ax, ay, aw, ah) = (anchor[0], anchor[1], anchor[2], anchor[3]);
     let (gx, gy, gw, gh) = (gt[0], gt[1], gt[2], gt[3]);
-
     [
-        (gx - ax) / aw,
-        (gy - ay) / ah,
-        (gw / aw).ln(),
-        (gh / ah).ln(),
+        (gx - ax) / (aw * center_variance),
+        (gy - ay) / (ah * center_variance),
+        (gw / aw).ln() / size_variance,
+        (gh / ah).ln() / size_variance,
     ]
 }
 
@@ -224,6 +239,72 @@ mod tests {
         assert_eq!(
             positives, 1,
             "Exactly one anchor should be forced positive"
+        );
+    }
+
+    #[test]
+    fn test_encode_decode_roundtrip() {
+        use burn::tensor::{Device, Tensor};
+        use ssd::decoder::{BoxDecoder, DecodeConfig};
+
+        let device = Device::default();
+        let cfg = DecodeConfig::default();
+        let anchors = [[0.5, 0.5, 0.4, 0.4], [0.25, 0.25, 0.1, 0.2]];
+        let gts = [[0.6, 0.55, 0.5, 0.3], [0.27, 0.22, 0.12, 0.17]];
+
+        for (a, g) in anchors.iter().zip(gts.iter()) {
+            let enc =
+                encode_ssd_box(*a, *g, cfg.center_variance, cfg.size_variance);
+            let deltas = Tensor::<3>::from_floats([[enc]], &device);
+            let anchor_t = Tensor::<2>::from_floats([*a], &device);
+            let decoder = BoxDecoder::new(cfg.clone());
+            let dec = decoder.decode(deltas, anchor_t);
+            let v = dec.into_data().try_to_vec::<f32>().unwrap();
+            assert!((v[0] - g[0]).abs() < 1e-4, "cx roundtrip");
+            assert!((v[1] - g[1]).abs() < 1e-4, "cy roundtrip");
+            assert!((v[2] - g[2]).abs() < 1e-4, "w roundtrip");
+            assert!((v[3] - g[3]).abs() < 1e-4, "h roundtrip");
+        }
+    }
+
+    #[test]
+    fn test_regression_loss_space_contract() {
+        use burn::tensor::{Device, Int, Tensor};
+        use ssd::decoder::{BoxDecoder, DecodeConfig};
+
+        let device = Device::default();
+        let cfg = DecodeConfig::default();
+        let anchor = [0.5, 0.5, 0.4, 0.4];
+        let gt = [0.6, 0.55, 0.5, 0.3];
+        let enc =
+            encode_ssd_box(anchor, gt, cfg.center_variance, cfg.size_variance);
+
+        let deltas = Tensor::<3>::from_floats([[enc]], &device);
+        // Independent tensor with identical values: production never feeds the
+        // same tensor handle as both pred and target, and aliasing one tensor
+        // as both sub operands hits a backend edge case.
+        let deltas2 = Tensor::<3>::from_floats([[enc]], &device);
+        let anchor_t = Tensor::<2>::from_floats([anchor], &device);
+        let decoded = BoxDecoder::new(cfg).decode(deltas.clone(), anchor_t);
+        let mask = Tensor::<2, Int>::from_ints([[1]], &device);
+
+        // Same space (deltas vs deltas): loss must be ~0
+        let same = crate::loss::ssd_regression_loss(
+            deltas.clone(),
+            deltas2,
+            mask.clone(),
+        );
+        let same_v = same.into_data().try_to_vec::<f32>().unwrap()[0];
+        assert!(same_v < 1e-6, "delta-space loss must be ~0, got {}", same_v);
+
+        // Mixed space (decoded boxes vs deltas): must be clearly non-zero,
+        // i.e. the old wiring is detectable
+        let mixed = crate::loss::ssd_regression_loss(decoded, deltas, mask);
+        let mixed_v = mixed.into_data().try_to_vec::<f32>().unwrap()[0];
+        assert!(
+            mixed_v > 0.1,
+            "mixed-space loss must be clearly non-zero, got {}",
+            mixed_v
         );
     }
 }

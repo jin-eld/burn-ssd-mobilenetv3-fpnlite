@@ -157,7 +157,7 @@ pub fn train(
         }
     }
 
-    let lr: f64 = 1e-4;
+    let lr: f64 = 1e-3;
     let mut learner = Learner::new(train_model, optim, lr);
 
     // load existing checkpoints for resuming

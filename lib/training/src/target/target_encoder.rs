@@ -278,11 +278,11 @@ mod tests {
         let boxes = to_vec_f32_3d(&tgt_boxes);
         let e = boxes[0][0];
 
-        // expected encoding:
-        let tx = (0.6 - 0.5) / 0.4;
-        let ty = (0.55 - 0.5) / 0.4;
-        let tw = (0.5f32 / 0.4).ln();
-        let th = (0.3f32 / 0.4).ln();
+        // expected encoding (variance-scaled, inverse of the decoder):
+        let tx = (0.6 - 0.5) / (0.4 * 0.1);
+        let ty = (0.55 - 0.5) / (0.4 * 0.1);
+        let tw = (0.5f32 / 0.4).ln() / 0.2;
+        let th = (0.3f32 / 0.4).ln() / 0.2;
 
         assert!((e[0] - tx).abs() < 1e-6);
         assert!((e[1] - ty).abs() < 1e-6);
