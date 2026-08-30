@@ -1,8 +1,13 @@
 use burn::tensor::{Float, Int, Tensor};
 use burn::train::{
-    metric::{Adaptor, LossInput},
+    metric::{
+        state::{FormatOptions, NumericMetricState},
+        Adaptor, LossInput, Metric, MetricMetadata, Numeric, NumericEntry,
+        SerializedEntry,
+    },
     ItemLazy,
 };
+use std::sync::Arc;
 
 pub struct SSDOutput {
     pub loss: Tensor<1, Float>,
@@ -48,6 +53,138 @@ impl SSDOutput {
             tgt_boxes,
             pos_mask,
         };
+    }
+}
+
+// diagnostic metrics
+#[derive(Clone)]
+pub struct ClsLossInput(pub Tensor<1, Float>);
+impl ItemLazy for ClsLossInput {
+    fn sync(self) -> Self {
+        return self;
+    }
+}
+
+#[derive(Clone)]
+pub struct RegLossInput(pub Tensor<1, Float>);
+impl ItemLazy for RegLossInput {
+    fn sync(self) -> Self {
+        return self;
+    }
+}
+
+#[derive(Clone)]
+pub struct PosCountInput(pub Tensor<1, Float>);
+impl ItemLazy for PosCountInput {
+    fn sync(self) -> Self {
+        return self;
+    }
+}
+
+impl Adaptor<ClsLossInput> for SSDOutput {
+    fn adapt(&self) -> ClsLossInput {
+        return ClsLossInput(self.loss_cls.clone());
+    }
+}
+
+impl Adaptor<RegLossInput> for SSDOutput {
+    fn adapt(&self) -> RegLossInput {
+        return RegLossInput(self.loss_reg.clone());
+    }
+}
+
+impl Adaptor<PosCountInput> for SSDOutput {
+    fn adapt(&self) -> PosCountInput {
+        // Sum all positive masks in the batch to get total positive anchors
+        let count = self.pos_mask.clone().float().flatten::<1>(0, 1).sum_dim(0);
+        return PosCountInput(count);
+    }
+}
+
+pub trait ScalarExtractor {
+    fn get_scalar(&self) -> f64;
+}
+
+impl ScalarExtractor for ClsLossInput {
+    fn get_scalar(&self) -> f64 {
+        return self.0.clone().into_scalar::<f32>() as f64;
+    }
+}
+
+impl ScalarExtractor for RegLossInput {
+    fn get_scalar(&self) -> f64 {
+        return self.0.clone().into_scalar::<f32>() as f64;
+    }
+}
+
+impl ScalarExtractor for PosCountInput {
+    fn get_scalar(&self) -> f64 {
+        return self.0.clone().into_scalar::<f32>() as f64;
+    }
+}
+
+#[derive(Clone)]
+pub struct AvgScalarMetric<I: ScalarExtractor + Send + Sync + Clone + 'static> {
+    state: NumericMetricState,
+    name: Arc<String>,
+    _marker: core::marker::PhantomData<I>,
+}
+
+impl<I: ScalarExtractor + Send + Sync + Clone + 'static> AvgScalarMetric<I> {
+    pub fn new(name: &str) -> Self {
+        return Self {
+            state: NumericMetricState::new(),
+            name: Arc::new(name.to_string()),
+            _marker: core::marker::PhantomData,
+        };
+    }
+}
+
+impl<I: ScalarExtractor + Send + Sync + Clone + 'static> Metric
+    for AvgScalarMetric<I>
+{
+    type Input = I;
+
+    fn update(
+        &mut self,
+        item: &Self::Input,
+        _metadata: &MetricMetadata,
+    ) -> SerializedEntry {
+        let val = item.get_scalar();
+        self.state.update(val, 1);
+        return self
+            .state
+            .compute_update(FormatOptions::new(self.name.clone()));
+    }
+
+    fn compute(&mut self) -> SerializedEntry {
+        return self
+            .state
+            .compute_final(FormatOptions::new(self.name.clone()));
+    }
+
+    fn clear(&mut self) {
+        self.state.reset();
+    }
+
+    fn name(&self) -> Arc<String> {
+        return self.name.clone();
+    }
+}
+
+impl<I: ScalarExtractor + Send + Sync + Clone + 'static> Numeric
+    for AvgScalarMetric<I>
+{
+    fn value(&self) -> Option<NumericEntry> {
+        return Some(self.state.current_value());
+    }
+
+    fn running_value(&self) -> Option<NumericEntry> {
+        return Some(self.state.running_value());
+    }
+
+    fn final_value(&self) -> NumericEntry {
+        return self.state.final_value();
     }
 }
 

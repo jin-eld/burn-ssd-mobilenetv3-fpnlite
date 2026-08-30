@@ -10,6 +10,9 @@ use std::path::{Path, PathBuf};
 use crate::dataset::{SSDBatcher, SSDDataset};
 use crate::loss::SSDLoss;
 use crate::target::{matcher::Matcher, target_encoder::SSDTargetEncoder};
+use crate::training::ssd_output::{
+    AvgScalarMetric, ClsLossInput, PosCountInput, RegLossInput,
+};
 use crate::training::ssd_train_step::SSDTrainModel;
 
 use mobilenetv3::MobileNetV3Arch;
@@ -186,6 +189,24 @@ pub fn train(
         SupervisedTraining::new(output, train_loader, valid_loader)
             .metric_train_numeric(LossMetric::new())
             .metric_valid_numeric(LossMetric::new())
+            .metric_train_numeric(AvgScalarMetric::<ClsLossInput>::new(
+                "Loss Cls",
+            ))
+            .metric_valid_numeric(AvgScalarMetric::<ClsLossInput>::new(
+                "Loss Cls",
+            ))
+            .metric_train_numeric(AvgScalarMetric::<RegLossInput>::new(
+                "Loss Reg",
+            ))
+            .metric_valid_numeric(AvgScalarMetric::<RegLossInput>::new(
+                "Loss Reg",
+            ))
+            .metric_train_numeric(AvgScalarMetric::<PosCountInput>::new(
+                "Pos Anchors",
+            ))
+            .metric_valid_numeric(AvgScalarMetric::<PosCountInput>::new(
+                "Pos Anchors",
+            ))
             .num_epochs(epochs)
             .with_default_checkpointers();
 
