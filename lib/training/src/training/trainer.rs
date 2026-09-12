@@ -1,6 +1,13 @@
 use burn::{
-    data::dataloader::DataLoaderBuilder,
-    optim::{lr_scheduler::LrSchedulerRecord, AdamConfig},
+    data::dataloader::{DataLoaderBuilder, Dataset},
+    optim::{
+        decay::WeightDecayConfig,
+        lr_scheduler::{
+            cosine::CosineAnnealingLrSchedulerConfig, LrSchedulerRecord,
+        },
+        momentum::MomentumConfig,
+        SgdConfig,
+    },
     store::ModuleRecord,
     tensor::Device,
     train::{metric::LossMetric, Learner, SupervisedTraining},
@@ -90,6 +97,7 @@ pub fn train(
     let dataset_valid = SSDDataset::new(inner_valid, input_w, input_h);
 
     let num_classes = dataset_train.num_classes();
+    let dataset_size = dataset_train.len();
 
     let batcher_train = SSDBatcher::new();
     let batcher_valid = SSDBatcher::new();
@@ -123,8 +131,9 @@ pub fn train(
     };
 
     let checkpoint_dir = PathBuf::from(output).join("checkpoint");
+    let epochs_file = PathBuf::from(output).join("epochs.txt");
     let mut start_epoch = 0;
-    let mut optim = AdamConfig::new().init();
+    let mut total_epochs = epochs;
 
     if resume {
         if !checkpoint_dir.exists() {
@@ -133,20 +142,23 @@ pub fn train(
                 checkpoint_dir
             ));
         }
-
+        // enforce the originally configured epochs for schedule consistency
+        if epochs_file.exists() {
+            let saved_str = std::fs::read_to_string(&epochs_file).unwrap();
+            if let Ok(saved) = saved_str.trim().parse::<usize>() {
+                if saved != epochs {
+                    println!(
+                        "Note: overriding --epochs {} with saved value {} for cosine schedule consistency.",
+                        epochs, saved
+                    );
+                }
+                total_epochs = saved;
+            }
+        }
         match find_latest_checkpoint(&checkpoint_dir)? {
             Some(epoch) => {
                 println!("Resuming from epoch {}", epoch);
                 start_epoch = epoch;
-
-                let optim_path =
-                    checkpoint_dir.join(format!("optim-{}.bpk", epoch));
-                optim = optim.load(&optim_path).map_err(|e| {
-                    format!(
-                        "Failed to load optimizer record from {:?}: {:?}",
-                        optim_path, e
-                    )
-                })?;
             }
             None => {
                 return Err(format!(
@@ -155,10 +167,45 @@ pub fn train(
                 ));
             }
         }
+    } else {
+        // save the epoch configuration for future resumes
+        std::fs::create_dir_all(output)
+            .map_err(|e| format!("Failed to create output dir: {}", e))?;
+        std::fs::write(&epochs_file, total_epochs.to_string())
+            .map_err(|e| format!("Failed to write epochs.txt: {}", e))?;
     }
 
-    let lr: f64 = 1e-3;
-    let mut learner = Learner::new(train_model, optim, lr);
+    // calculate total iterations for the cosine schedule
+    let steps_per_epoch = dataset_size.div_ceil(batch_size);
+    let num_iters = total_epochs * steps_per_epoch;
+
+    // base LR scaled from torchvision's 0.15 @ batch 192 down to our batch 8
+    let base_lr: f64 = 6e-3;
+
+    let mut optim = SgdConfig::new()
+        .with_momentum(Some(
+            MomentumConfig::new().with_momentum(0.9).with_dampening(0.0),
+        ))
+        .with_weight_decay(Some(WeightDecayConfig::new(4e-5_f32)))
+        .init();
+
+    if resume && start_epoch > 0 {
+        let optim_path =
+            checkpoint_dir.join(format!("optim-{}.bpk", start_epoch));
+        optim = optim.load(&optim_path).map_err(|e| {
+            format!(
+                "Failed to load optimizer record from {:?}: {:?}",
+                optim_path, e
+            )
+        })?;
+    }
+
+    let scheduler = CosineAnnealingLrSchedulerConfig::new(base_lr, num_iters)
+        .with_min_lr(0.0)
+        .init()
+        .map_err(|e| format!("Failed to init cosine scheduler: {}", e))?;
+
+    let mut learner = Learner::new(train_model, optim, scheduler);
 
     // load existing checkpoints for resuming
     if start_epoch > 0 {
@@ -207,7 +254,7 @@ pub fn train(
             .metric_valid_numeric(AvgScalarMetric::<PosCountInput>::new(
                 "Pos Anchors",
             ))
-            .num_epochs(epochs)
+            .num_epochs(total_epochs)
             .with_default_checkpointers();
 
     // Tell the training loop to start counting from the resumed epoch
