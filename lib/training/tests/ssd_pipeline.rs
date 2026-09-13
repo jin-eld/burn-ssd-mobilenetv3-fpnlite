@@ -100,7 +100,7 @@ fn training_test_forward_backward() {
     // TrainStep::step -> TrainOutput<SSDOutput>
     let out = TrainStep::step(&train_model, batch);
 
-    let loss_val = out.item.loss.to_data().to_vec::<f32>().unwrap()[0];
+    let loss_val = out.item.loss.to_data().try_to_vec::<f32>().unwrap()[0];
 
     assert!(loss_val.is_finite());
 }

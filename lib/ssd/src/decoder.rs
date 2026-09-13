@@ -132,7 +132,7 @@ mod tests {
         let out = decoder.decode(deltas, anchors);
 
         // Extract values as Vec<f32>
-        let values = out.into_data().to_vec::<f32>().unwrap();
+        let values = out.into_data().try_to_vec::<f32>().unwrap();
 
         assert!((values[0] - 0.5).abs() < 1e-6); // cx
         assert!((values[1] - 0.5).abs() < 1e-6); // cy
@@ -159,7 +159,7 @@ mod tests {
         let decoder = BoxDecoder::new(cfg);
 
         let out = decoder.decode(deltas, anchors);
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         // Expected math:
         // cx' = 0.2 * 0.1 * 0.2 + 0.4 = 0.404
@@ -195,7 +195,7 @@ mod tests {
         let decoder = BoxDecoder::new(cfg);
 
         let out = decoder.decode(deltas, anchors);
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         assert!((v[0] - 1.0).abs() < 1e-6); // cx clipped
         assert!((v[1] - 1.0).abs() < 1e-6); // cy clipped
@@ -236,7 +236,7 @@ mod tests {
 
         assert_eq!(out.dims(), [2, 3, 4]);
 
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         // Spot‑check a few values:
         // cx' = tx * 0.1 * w + cx
@@ -261,7 +261,7 @@ mod tests {
         let decoder = BoxDecoder::new(cfg);
 
         let out = decoder.decode(deltas, anchors);
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         assert!((v[0] - 0.0).abs() < 1e-6); // cx clipped
         assert!((v[1] - 0.0).abs() < 1e-6); // cy clipped
@@ -284,7 +284,7 @@ mod tests {
         let decoder = BoxDecoder::new(cfg);
 
         let out = decoder.decode(deltas, anchors);
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         assert!((v[0] - 1.0).abs() < 1e-6); // cx clipped
         assert!((v[1] - 0.5).abs() < 1e-6); // cy unchanged
@@ -307,7 +307,7 @@ mod tests {
         let decoder = BoxDecoder::new(cfg);
 
         let out = decoder.decode(deltas, anchors);
-        let v = out.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
 
         assert!((v[2] - 1.0).abs() < 1e-6); // w clipped
         assert!((v[3] - 1.0).abs() < 1e-6); // h clipped

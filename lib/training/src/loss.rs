@@ -150,7 +150,7 @@ mod tests {
 
     fn scalar_value(t: Tensor<1>) -> f32 {
         let data = t.to_data();
-        let vec = data.to_vec::<f32>().unwrap();
+        let vec = data.try_to_vec::<f32>().unwrap();
         vec[0]
     }
 

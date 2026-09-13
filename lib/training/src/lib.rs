@@ -23,8 +23,8 @@ mod tests {
         let dec = BoxDecoder::new(DecodeConfig::default());
         let out = dec.decode(deltas, anchors);
 
-        let v = out.into_data().to_vec::<f32>().unwrap();
-        let g = gt.into_data().to_vec::<f32>().unwrap();
+        let v = out.into_data().try_to_vec::<f32>().unwrap();
+        let g = gt.into_data().try_to_vec::<f32>().unwrap();
 
         for i in 0..4 {
             assert!((v[i] - g[i]).abs() < 1e-5);

@@ -78,7 +78,7 @@ mod tests {
 
     fn to_vec_i32(t: &Tensor<2, Int>) -> Vec<Vec<i32>> {
         let data = t.to_data();
-        let flat = data.to_vec::<i32>().unwrap();
+        let flat = data.try_to_vec::<i32>().unwrap();
         let shape = t.shape();
         let cols = shape.as_slice()[1];
 
@@ -87,7 +87,7 @@ mod tests {
 
     fn to_vec_f32_3d(t: &Tensor<3>) -> Vec<Vec<[f32; 4]>> {
         let data = t.to_data();
-        let flat = data.to_vec::<f32>().unwrap();
+        let flat = data.try_to_vec::<f32>().unwrap();
         let shape = t.shape();
         let batch = shape.as_slice()[0];
         let anchors = shape.as_slice()[1];
