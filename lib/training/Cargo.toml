@@ -12,6 +12,7 @@ burn-dataset.workspace = true
 burn-dispatch.workspace = true
 image.workspace = true
 mobilenetv3.workspace = true
+rand.workspace = true
 ssd.workspace = true
 transforms.workspace = true
 

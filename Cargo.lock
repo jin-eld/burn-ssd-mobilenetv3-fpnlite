@@ -7024,6 +7024,7 @@ dependencies = [
  "burn-dispatch",
  "image",
  "mobilenetv3",
+ "rand 0.10.2",
  "ssd",
  "transforms",
 ]

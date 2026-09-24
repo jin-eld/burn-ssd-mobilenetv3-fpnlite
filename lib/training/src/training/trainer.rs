@@ -93,8 +93,8 @@ pub fn train(
             format!("Failed to load COCO dataset (validation): {}", e)
         })?;
 
-    let dataset_train = SSDDataset::new(inner_train, input_w, input_h);
-    let dataset_valid = SSDDataset::new(inner_valid, input_w, input_h);
+    let dataset_train = SSDDataset::new(inner_train, input_w, input_h, true);
+    let dataset_valid = SSDDataset::new(inner_valid, input_w, input_h, false);
 
     let num_classes = dataset_train.num_classes();
     let dataset_size = dataset_train.len();

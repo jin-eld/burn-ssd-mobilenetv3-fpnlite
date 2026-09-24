@@ -16,14 +16,21 @@ pub struct SSDDataset {
     inner: ImageFolderDataset,
     input_w: u32,
     input_h: u32,
+    augment: bool,
 }
 
 impl SSDDataset {
-    pub fn new(inner: ImageFolderDataset, input_w: u32, input_h: u32) -> Self {
+    pub fn new(
+        inner: ImageFolderDataset,
+        input_w: u32,
+        input_h: u32,
+        augment: bool,
+    ) -> Self {
         return Self {
             inner,
             input_w,
             input_h,
+            augment,
         };
     }
 }
@@ -35,6 +42,12 @@ impl Dataset<SSDSample> for SSDDataset {
 
     fn get(&self, index: usize) -> Result<SSDSample, DatasetError> {
         let item: ImageDatasetItem = self.inner.get(index)?;
+        // draw augmentation params once per sample (train split only)
+        let params = if self.augment {
+            super::augmentation::AugmentationParams::random(&mut rand::rng())
+        } else {
+            super::augmentation::AugmentationParams::identity()
+        };
 
         let pixels_u8: Vec<u8> = match item.image {
             burn::data::dataset::vision::PixelData::U8(bytes) => bytes,
@@ -92,6 +105,14 @@ impl Dataset<SSDSample> for SSDDataset {
             _ => (Vec::new(), Vec::new()),
         };
 
+        // photometric distortion + optional horizontal flip (train only)
+        let mut rgb = dyn_img.to_rgb8();
+        rgb = super::augmentation::distort_image(rgb, &params);
+        if params.hflip {
+            rgb = super::augmentation::flip_image(&rgb);
+        }
+        let dyn_img = image::DynamicImage::ImageRgb8(rgb);
+
         // resize image to SSD input size
         let resized = img_resize_ssd(&dyn_img, self.input_w, self.input_h);
 
@@ -105,11 +126,15 @@ impl Dataset<SSDSample> for SSDDataset {
         );
 
         // convert to normalized cxcywh
-        let boxes = coco_to_cxcywh_normalized(
+        let mut boxes = coco_to_cxcywh_normalized(
             &boxes,
             self.input_w as f32,
             self.input_h as f32,
         );
+        // mirror box centers if the image was mirrored
+        if params.hflip {
+            super::augmentation::flip_boxes(&mut boxes);
+        }
 
         // extract raw pixels as Vec<u8> for device-agnostic batching
         let rgb_img = resized.to_rgb8();
@@ -178,7 +203,7 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320);
+        let dataset = SSDDataset::new(coco, 320, 320, false);
 
         // Find an image with no boxes
         let sample_result =
@@ -208,7 +233,7 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320);
+        let dataset = SSDDataset::new(coco, 320, 320, false);
 
         let sample = dataset.get(0).expect("sample should exist");
 
@@ -225,5 +250,34 @@ mod tests {
 
         // labels exist
         assert!(!sample.labels.is_empty());
+    }
+
+    #[test]
+    fn test_validation_split_is_deterministic() {
+        let coco =
+            ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
+                .unwrap();
+        let dataset = SSDDataset::new(coco, 320, 320, false);
+        let a = dataset.get(0).expect("sample should exist");
+        let b = dataset.get(0).expect("sample should exist");
+        assert_eq!(a.image_data, b.image_data);
+        assert_eq!(a.boxes, b.boxes);
+        assert_eq!(a.labels, b.labels);
+    }
+
+    #[test]
+    fn test_train_split_augments() {
+        let coco =
+            ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
+                .unwrap();
+        let dataset = SSDDataset::new(coco, 320, 320, true);
+        let samples: Vec<SSDSample> = (0..4)
+            .map(|_| dataset.get(0).expect("sample should exist"))
+            .collect();
+        // continuous jitter makes identical draws practically impossible
+        let all_identical = samples
+            .windows(2)
+            .all(|w| w[0].image_data == w[1].image_data);
+        assert!(!all_identical, "augment=true must alter the pixels");
     }
 }

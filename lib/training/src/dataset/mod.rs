@@ -1,3 +1,4 @@
+pub mod augmentation;
 pub mod ssd_batcher;
 pub mod ssd_dataset;
 
