@@ -36,7 +36,7 @@ struct Args {
 fn main() {
     let args: Args = argh::from_env();
 
-    let device = Device::default().autodiff();
+    let device = Device::wgpu(Default::default()).autodiff();
 
     if let Err(e) = training::training::trainer::train(
         &args.coco_json,

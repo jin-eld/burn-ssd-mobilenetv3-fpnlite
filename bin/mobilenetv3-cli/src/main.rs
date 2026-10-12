@@ -1,8 +1,6 @@
 #![recursion_limit = "256"] // as suggested by burn-wgpu docs
 use argh::FromArgs;
-use burn::backend::wgpu::WgpuDevice;
 use burn::tensor::{activation::softmax, Device, Float, Tensor};
-use burn_dispatch::DispatchDevice;
 
 use mobilenetv3::imagenet::{Normalizer, CLASSES, IMAGE_SIZE};
 use std::process;
@@ -64,8 +62,7 @@ fn load_and_preprocess_image(
 fn main() {
     let args: Arguments = argh::from_env();
 
-    let dispatch_device = DispatchDevice::Wgpu(WgpuDevice::default());
-    let device: Device = dispatch_device.into();
+    let device = Device::wgpu(Default::default());
 
     let model: mobilenetv3::MobileNetV3;
 

@@ -238,7 +238,7 @@ mod tests {
         let sample = dataset.get(0).expect("sample should exist");
 
         // image data shape is [H, W, C] before the batcher permutes it
-        assert_eq!(sample.image_data.shape.dims(), [320, 320, 3]);
+        assert_eq!(sample.image_data.shape().dims(), [320, 320, 3]);
 
         // boxes normalized
         for b in &sample.boxes {

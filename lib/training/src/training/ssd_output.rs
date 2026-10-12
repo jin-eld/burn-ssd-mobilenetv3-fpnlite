@@ -1,4 +1,4 @@
-use burn::tensor::{Float, Int, Tensor};
+use burn::tensor::{ExecutionError, Float, Int, Tensor, TensorReadError};
 use burn::train::{
     metric::{
         state::{FormatOptions, NumericMetricState},
@@ -21,8 +21,8 @@ pub struct SSDOutput {
 }
 
 impl ItemLazy for SSDOutput {
-    fn sync(self) -> Self {
-        return self;
+    fn sync(self) -> Result<Self, ExecutionError> {
+        return Ok(self);
     }
 }
 
@@ -60,24 +60,24 @@ impl SSDOutput {
 #[derive(Clone)]
 pub struct ClsLossInput(pub Tensor<1, Float>);
 impl ItemLazy for ClsLossInput {
-    fn sync(self) -> Self {
-        return self;
+    fn sync(self) -> Result<Self, ExecutionError> {
+        return Ok(self);
     }
 }
 
 #[derive(Clone)]
 pub struct RegLossInput(pub Tensor<1, Float>);
 impl ItemLazy for RegLossInput {
-    fn sync(self) -> Self {
-        return self;
+    fn sync(self) -> Result<Self, ExecutionError> {
+        return Ok(self);
     }
 }
 
 #[derive(Clone)]
 pub struct PosCountInput(pub Tensor<1, Float>);
 impl ItemLazy for PosCountInput {
-    fn sync(self) -> Self {
-        return self;
+    fn sync(self) -> Result<Self, ExecutionError> {
+        return Ok(self);
     }
 }
 
@@ -149,18 +149,18 @@ impl<I: ScalarExtractor + Send + Sync + Clone + 'static> Metric
         &mut self,
         item: &Self::Input,
         _metadata: &MetricMetadata,
-    ) -> SerializedEntry {
+    ) -> Result<SerializedEntry, TensorReadError> {
         let val = item.get_scalar();
         self.state.update(val, 1);
-        return self
+        return Ok(self
             .state
-            .compute_update(FormatOptions::new(self.name.clone()));
+            .compute_update(FormatOptions::new(self.name.clone())));
     }
 
-    fn compute(&mut self) -> SerializedEntry {
-        return self
+    fn compute(&mut self) -> Result<SerializedEntry, TensorReadError> {
+        return Ok(self
             .state
-            .compute_final(FormatOptions::new(self.name.clone()));
+            .compute_final(FormatOptions::new(self.name.clone())));
     }
 
     fn clear(&mut self) {
