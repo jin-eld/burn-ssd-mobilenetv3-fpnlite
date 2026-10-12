@@ -74,7 +74,7 @@ fn training_test_forward_backward() {
     let dataset = SSDDataset::new(coco, 320, 320, false);
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
-        .batch_size(2)
+        .batch_size(2) // https://github.com/tracel-ai/burn/issues/6054
         .set_device(device.clone())
         .build(dataset);
 
@@ -120,7 +120,7 @@ fn training_test_optimizer_step() {
 
     let dataset = SSDDataset::new(coco, 320, 320, false);
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
-        .batch_size(2)
+        .batch_size(2) // https://github.com/tracel-ai/burn/issues/6054
         .set_device(device.clone())
         .build(dataset);
 
