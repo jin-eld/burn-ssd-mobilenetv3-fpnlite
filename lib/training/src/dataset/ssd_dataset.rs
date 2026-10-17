@@ -16,6 +16,7 @@ pub struct SSDDataset {
     inner: ImageFolderDataset,
     input_w: u32,
     input_h: u32,
+    indices: Vec<usize>,
     augment: bool,
 }
 
@@ -24,12 +25,14 @@ impl SSDDataset {
         inner: ImageFolderDataset,
         input_w: u32,
         input_h: u32,
+        indices: Vec<usize>,
         augment: bool,
     ) -> Self {
         return Self {
             inner,
             input_w,
             input_h,
+            indices,
             augment,
         };
     }
@@ -37,11 +40,12 @@ impl SSDDataset {
 
 impl Dataset<SSDSample> for SSDDataset {
     fn len(&self) -> usize {
-        return self.inner.len();
+        return self.indices.len();
     }
 
     fn get(&self, index: usize) -> Result<SSDSample, DatasetError> {
-        let item: ImageDatasetItem = self.inner.get(index)?;
+        let real_index = self.indices[index];
+        let item: ImageDatasetItem = self.inner.get(real_index)?;
         // draw augmentation params once per sample (train split only)
         let params = if self.augment {
             super::augmentation::AugmentationParams::random(&mut rand::rng())
@@ -154,10 +158,10 @@ impl Dataset<SSDSample> for SSDDataset {
 
 impl SSDDataset {
     pub fn num_classes(&self) -> usize {
-        // scan all annotations and find the maximum label
+        // scan all annotations in our subset and find the maximum label
         let mut max_label = 0;
 
-        for i in 0..self.inner.len() {
+        for &i in &self.indices {
             if let Ok(item) = self.inner.get(i) {
                 if let Annotation::BoundingBoxes(v) = item.annotation {
                     for bb in v {
@@ -203,7 +207,8 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320, false);
+        let indices: Vec<usize> = (0..coco.len()).collect();
+        let dataset = SSDDataset::new(coco, 320, 320, indices, false);
 
         // Find an image with no boxes
         let sample_result =
@@ -233,7 +238,8 @@ mod tests {
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
 
-        let dataset = SSDDataset::new(coco, 320, 320, false);
+        let indices: Vec<usize> = (0..coco.len()).collect();
+        let dataset = SSDDataset::new(coco, 320, 320, indices, false);
 
         let sample = dataset.get(0).expect("sample should exist");
 
@@ -257,7 +263,8 @@ mod tests {
         let coco =
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
-        let dataset = SSDDataset::new(coco, 320, 320, false);
+        let indices: Vec<usize> = (0..coco.len()).collect();
+        let dataset = SSDDataset::new(coco, 320, 320, indices, false);
         let a = dataset.get(0).expect("sample should exist");
         let b = dataset.get(0).expect("sample should exist");
         assert_eq!(a.image_data, b.image_data);
@@ -270,7 +277,8 @@ mod tests {
         let coco =
             ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
                 .unwrap();
-        let dataset = SSDDataset::new(coco, 320, 320, true);
+        let indices: Vec<usize> = (0..coco.len()).collect();
+        let dataset = SSDDataset::new(coco, 320, 320, indices, true);
         let samples: Vec<SSDSample> = (0..4)
             .map(|_| dataset.get(0).expect("sample should exist"))
             .collect();
@@ -279,5 +287,44 @@ mod tests {
             .windows(2)
             .all(|w| w[0].image_data == w[1].image_data);
         assert!(!all_identical, "augment=true must alter the pixels");
+    }
+
+    #[test]
+    fn test_subset_indices_mapping() {
+        let coco1 =
+            ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
+                .unwrap();
+        let coco2 =
+            ImageFolderDataset::new_coco_detection(COCO_JSON, COCO_IMAGES)
+                .unwrap();
+
+        let full_len = coco1.len();
+        assert!(full_len >= 2, "fixture must have at least 2 images");
+        let full_indices: Vec<usize> = (0..full_len).collect();
+        let full_dataset =
+            SSDDataset::new(coco1, 320, 320, full_indices, false);
+
+        // reversed pair: subset position 0 must reach the LAST full index,
+        // so position != source and the mapping is genuinely exercised
+        let subset_indices = vec![full_len - 1, 0];
+        let subset_dataset =
+            SSDDataset::new(coco2, 320, 320, subset_indices, false);
+
+        assert_eq!(subset_dataset.len(), 2);
+
+        // subset[0] must equal full[full_len - 1]
+        let a = full_dataset.get(full_len - 1).unwrap();
+        let b = subset_dataset.get(0).unwrap();
+        assert_eq!(a.image_data, b.image_data);
+        assert_eq!(a.boxes, b.boxes);
+        assert_eq!(a.labels, b.labels);
+
+        // subset[1] must equal full[0]
+        let c = full_dataset.get(0).unwrap();
+        let d = subset_dataset.get(1).unwrap();
+        assert_eq!(c.image_data, d.image_data);
+        assert_eq!(c.boxes, d.boxes);
+        assert_eq!(c.boxes, d.boxes);
+        assert_eq!(c.labels, d.labels);
     }
 }

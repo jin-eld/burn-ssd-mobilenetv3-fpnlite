@@ -1,4 +1,4 @@
-use burn::data::dataloader::DataLoaderBuilder;
+use burn::data::dataloader::{DataLoaderBuilder, Dataset};
 use burn::data::dataset::vision::ImageFolderDataset;
 use burn::tensor::Device;
 use burn::train::TrainStep;
@@ -23,7 +23,8 @@ fn test_ssd_full_pipeline() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, false);
+    let indices: Vec<usize> = (0..coco.len()).collect();
+    let dataset = SSDDataset::new(coco, 320, 320, indices, false);
     let num_classes = dataset.num_classes();
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
@@ -71,7 +72,8 @@ fn training_test_forward_backward() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, false);
+    let indices: Vec<usize> = (0..coco.len()).collect();
+    let dataset = SSDDataset::new(coco, 320, 320, indices, false);
 
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(2) // https://github.com/tracel-ai/burn/issues/6054
@@ -118,7 +120,8 @@ fn training_test_optimizer_step() {
     )
     .unwrap();
 
-    let dataset = SSDDataset::new(coco, 320, 320, false);
+    let indices: Vec<usize> = (0..coco.len()).collect();
+    let dataset = SSDDataset::new(coco, 320, 320, indices, false);
     let loader = DataLoaderBuilder::new(SSDBatcher::new())
         .batch_size(2) // https://github.com/tracel-ai/burn/issues/6054
         .set_device(device.clone())

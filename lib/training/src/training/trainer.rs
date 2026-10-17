@@ -12,6 +12,9 @@ use burn::{
     tensor::Device,
     train::{metric::LossMetric, Learner, SupervisedTraining},
 };
+use rand::rngs::StdRng;
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
 use std::path::{Path, PathBuf};
 
 use crate::dataset::{SSDBatcher, SSDDataset};
@@ -93,8 +96,26 @@ pub fn train(
             format!("Failed to load COCO dataset (validation): {}", e)
         })?;
 
-    let dataset_train = SSDDataset::new(inner_train, input_w, input_h, true);
-    let dataset_valid = SSDDataset::new(inner_valid, input_w, input_h, false);
+    // create a seeded split (90% train, 10% valid)
+    let total_size = inner_train.len();
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut all_indices: Vec<usize> = (0..total_size).collect();
+    all_indices.shuffle(&mut rng);
+
+    let split_point = (total_size as f64 * 0.9).round() as usize;
+    let train_indices = all_indices[..split_point].to_vec();
+    let valid_indices = all_indices[split_point..].to_vec();
+
+    println!(
+        "Dataset split: {} training images, {} validation images",
+        train_indices.len(),
+        valid_indices.len()
+    );
+
+    let dataset_train =
+        SSDDataset::new(inner_train, input_w, input_h, train_indices, true);
+    let dataset_valid =
+        SSDDataset::new(inner_valid, input_w, input_h, valid_indices, false);
 
     let num_classes = dataset_train.num_classes();
     let dataset_size = dataset_train.len();
