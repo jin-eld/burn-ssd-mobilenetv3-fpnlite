@@ -2,7 +2,7 @@
 
 use crate::ops::nms::NmsOps;
 use burn::prelude::Int;
-use burn::tensor::activation::softmax;
+use burn::tensor::activation::sigmoid;
 use burn::tensor::Tensor;
 
 /// A final detection after post‑processing.
@@ -34,7 +34,7 @@ fn tensor_to_vec_i32<const D: usize>(
 }
 
 /// SSD‑Lite post‑processing:
-/// - softmax over classes
+/// - sigmoid over classes
 /// - remove background class
 /// - pick best class per anchor
 /// - filter by score threshold
@@ -50,7 +50,7 @@ pub fn ssd_postprocess(
     let num_classes = class_logits.dims()[1];
 
     // Softmax over class dimension
-    let probs = softmax(class_logits.clone(), 1);
+    let probs = sigmoid(class_logits.clone());
 
     // Remove background class (index 0)
     let probs_no_bg = probs.slice([0..num_anchors, 1..num_classes]);
@@ -148,15 +148,15 @@ mod tests {
     use burn::tensor::{Device, Tensor};
 
     #[test]
-    fn test_postprocess_basic_softmax_and_filtering() {
+    fn test_postprocess_basic_sigmoid_and_filtering() {
         let device = Device::default();
-
-        // 3 anchors, 3 classes (background + 2 real classes)
+        // 3 anchors, 3 classes (background + 2 real classes).
+        // Under sigmoid, strongly negative logits give scores near 0.
         let logits = Tensor::<2>::from_floats(
             [
-                [0.0, 5.0, 1.0], // anchor 0 → class 1
-                [0.0, 0.1, 0.2], // anchor 1 → class 2 (but low score)
-                [0.0, 3.0, 0.1], // anchor 2 → class 1
+                [0.0, 5.0, 1.0],   // anchor 0 → class 1 (high score)
+                [0.0, -5.0, -5.0], // anchor 1 → filtered out (low score)
+                [0.0, 3.0, 0.1],   // anchor 2 → class 1
             ],
             &device,
         );
@@ -178,6 +178,7 @@ mod tests {
         )
         .unwrap();
 
+        // anchor 1's sigmoid scores are ~0.007 → below the 0.5 threshold
         assert_eq!(detections.len(), 2);
         assert_eq!(detections[0].class, 0); // class 1 (background removed)
         assert_eq!(detections[1].class, 0);
@@ -224,8 +225,8 @@ mod tests {
 
         let logits = Tensor::<2>::from_floats(
             [
-                [0.0, 0.1, 0.2], // low scores
-                [0.0, 5.0, 0.1], // high score
+                [0.0, -5.0, -5.0], // low scores (sigmoid ~0.007)
+                [0.0, 5.0, 0.1],   // high score
             ],
             &device,
         );

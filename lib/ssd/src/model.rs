@@ -112,22 +112,22 @@ impl SSDLiteMobileNetV3 {
         &self.decoder
     }
 
-    /// Full forward pass: image -> backbone -> FPN -> head -> decoded boxes.
+    /// Raw head outputs: logits and variance-scaled box deltas (no decoding).
     ///
     /// Returns:
-    /// - cls_logits: [N, A, num_classes]
-    /// - boxes:      [N, A, 4] (cx, cy, w, h) in normalized coords
+    /// - cls_logits:  [N, A, num_classes]
+    /// - bbox_deltas: [N, A, 4] (tx, ty, tw, th) SSD deltas
     pub fn forward_raw(&self, x: Tensor<4>) -> (Tensor<3>, Tensor<3>) {
         return self.model.forward_head(x);
     }
 
     pub fn forward(&self, input: Tensor<4>) -> Result<Vec<Detection>, String> {
-        let (class_logits, decoded_boxes) = self.forward_raw(input);
-
+        let input_dims = input.dims();
+        let device = input.device();
+        let (class_logits, bbox_deltas) = self.forward_raw(input);
         // Expect batch size 1
         let dims_logits = class_logits.dims();
-        let dims_boxes = decoded_boxes.dims();
-
+        let dims_boxes = bbox_deltas.dims();
         assert_eq!(
             dims_logits[0], 1,
             "forward() currently supports batch size 1 only"
@@ -137,10 +137,19 @@ impl SSDLiteMobileNetV3 {
             "forward() currently supports batch size 1 only"
         );
 
-        // Remove batch dimension 0
-        let class_logits = class_logits.squeeze_dim::<2>(0);
-        let decoded_boxes = decoded_boxes.squeeze_dim::<2>(0);
+        // decode deltas -> boxes using anchors for this input size
+        let anchors = self.generate_anchors_for_input(
+            input_dims[2] as u32,
+            input_dims[3] as u32,
+            &device,
+        );
+        let decoded = self
+            .decoder
+            .decode(bbox_deltas, anchors_to_tensor(&anchors, &device));
 
+        // remove batch dimension 0
+        let class_logits = class_logits.squeeze_dim::<2>(0);
+        let decoded_boxes = decoded.squeeze_dim::<2>(0);
         return ssd_postprocess(
             &decoded_boxes,
             &class_logits,
@@ -150,13 +159,8 @@ impl SSDLiteMobileNetV3 {
         );
     }
 
-    /// Training helper: generate anchors for a given input size by running a
-    /// dummy forward pass through the backbone + FPN to obtain the true
-    /// feature map sizes.
-    ///
-    /// This guarantees that anchors match the SSDLite head exactly.
-    // TODO: was a pure testing helper, but now we need it elsewhere too
-    // -> rather training feature    #[cfg(any(test, feature = "test-utils"))]
+    // Needed at inference/eval time to build anchors matching the true
+    // feature map sizes (runs a dummy forward through backbone + FPN).
     pub fn generate_anchors_for_input(
         &self,
         input_h: u32,
@@ -187,6 +191,16 @@ impl SSDLiteMobileNetV3 {
         // generate anchors using the model’s AnchorGenerator
         self.anchors.generate(&feature_map_sizes)
     }
+}
+
+/// Convert anchors to a [num_anchors, 4] tensor.
+fn anchors_to_tensor(anchors: &[[f32; 4]], device: &Device) -> Tensor<2> {
+    let mut flat = Vec::with_capacity(anchors.len() * 4);
+    for a in anchors {
+        flat.extend_from_slice(a);
+    }
+    return Tensor::<1>::from_floats(flat.as_slice(), device)
+        .reshape([anchors.len(), 4]);
 }
 
 #[cfg(test)]
