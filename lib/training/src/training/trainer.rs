@@ -284,10 +284,19 @@ pub fn train(
     }
 
     let training = training.summary();
+    let result = training.launch(learner);
 
-    let _trained = training.launch(learner);
+    // Burn 0.22 stops training silently on metric/dataloader/checkpointer
+    // errors instead of panicking, so we must check the result.
+    if let Some(err) = result.error {
+        return Err(format!("Training stopped due to error: {:?}", err));
+    }
 
-    println!("Training complete!");
+    if let Some(interrupted) = result.interrupted {
+        println!("Note: Training was interrupted: {:?}", interrupted);
+    } else {
+        println!("Training complete!");
+    }
 
     return Ok(());
 }
