@@ -22,6 +22,7 @@ pub struct SSDOutput {
 
 impl ItemLazy for SSDOutput {
     fn sync(self) -> Result<Self, ExecutionError> {
+        self.loss.device().flush()?;
         return Ok(self);
     }
 }
@@ -61,6 +62,7 @@ impl SSDOutput {
 pub struct ClsLossInput(pub Tensor<1, Float>);
 impl ItemLazy for ClsLossInput {
     fn sync(self) -> Result<Self, ExecutionError> {
+        self.0.device().flush()?;
         return Ok(self);
     }
 }
@@ -69,6 +71,7 @@ impl ItemLazy for ClsLossInput {
 pub struct RegLossInput(pub Tensor<1, Float>);
 impl ItemLazy for RegLossInput {
     fn sync(self) -> Result<Self, ExecutionError> {
+        self.0.device().flush()?;
         return Ok(self);
     }
 }
@@ -77,6 +80,7 @@ impl ItemLazy for RegLossInput {
 pub struct PosCountInput(pub Tensor<1, Float>);
 impl ItemLazy for PosCountInput {
     fn sync(self) -> Result<Self, ExecutionError> {
+        self.0.device().flush()?;
         return Ok(self);
     }
 }
