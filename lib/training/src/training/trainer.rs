@@ -28,6 +28,20 @@ use crate::training::ssd_train_step::SSDTrainModel;
 use mobilenetv3::MobileNetV3Arch;
 use ssd::model::SSDLiteMobileNetV3;
 
+// Generate a deterministic 90/10 train/valid split of indices.
+// Will be used by both the trainer and the standalone mAP evaluator to ensure
+// they operate on the exact same held-out validation set.
+pub fn split_indices(total_size: usize, seed: u64) -> (Vec<usize>, Vec<usize>) {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let mut all_indices: Vec<usize> = (0..total_size).collect();
+    all_indices.shuffle(&mut rng);
+    let split_point = (total_size as f64 * 0.9).round() as usize;
+    let train_indices = all_indices[..split_point].to_vec();
+    let valid_indices = all_indices[split_point..].to_vec();
+
+    return (train_indices, valid_indices);
+}
+
 // Scans the checkpoint directory for `model-*.bpk` files and returns the
 // highest epoch number.
 // Returns `Ok(None)` if the directory exists but contains no valid checkpoints.
@@ -98,14 +112,7 @@ pub fn train(
 
     // create a seeded split (90% train, 10% valid)
     let total_size = inner_train.len();
-    let mut rng = StdRng::seed_from_u64(seed);
-    let mut all_indices: Vec<usize> = (0..total_size).collect();
-    all_indices.shuffle(&mut rng);
-
-    let split_point = (total_size as f64 * 0.9).round() as usize;
-    let train_indices = all_indices[..split_point].to_vec();
-    let valid_indices = all_indices[split_point..].to_vec();
-
+    let (train_indices, valid_indices) = split_indices(total_size, seed);
     println!(
         "Dataset split: {} training images, {} validation images",
         train_indices.len(),
