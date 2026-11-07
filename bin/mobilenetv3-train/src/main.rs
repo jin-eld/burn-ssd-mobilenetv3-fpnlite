@@ -39,6 +39,19 @@ struct Args {
     /// path to the checkpoint file to evaluate (required if --eval is set)
     #[argh(option)]
     checkpoint: Option<String>,
+
+    /// number of validation images to visualize with bounding boxes
+    /// (requires --eval)
+    #[argh(option)]
+    visualize: Option<usize>,
+
+    /// directory to save visualized images
+    #[argh(option, default = "String::from(\"visualizations\")")]
+    visualize_dir: String,
+
+    /// score threshold for drawing boxes (default 0.3 to avoid clutter)
+    #[argh(option, default = "0.3")]
+    visualize_threshold: f32,
 }
 
 fn main() {
@@ -51,12 +64,20 @@ fn main() {
             std::process::exit(1);
         });
 
+        let viz_config =
+            args.visualize.map(|n| training::eval::VisualizeConfig {
+                num_images: n,
+                output_dir: args.visualize_dir.clone(),
+                score_threshold: args.visualize_threshold,
+            });
+
         if let Err(e) = training::eval::evaluate(
             &args.coco_json,
             &args.coco_images,
             &checkpoint_path,
             args.seed,
             &device,
+            viz_config,
         ) {
             eprintln!("Evaluation failed: {}", e);
             std::process::exit(1);
