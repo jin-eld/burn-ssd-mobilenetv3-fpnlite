@@ -1,4 +1,5 @@
 pub mod dataset;
+pub mod eval;
 pub mod loss;
 pub mod target;
 pub mod training;

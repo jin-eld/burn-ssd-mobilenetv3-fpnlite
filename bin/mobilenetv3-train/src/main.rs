@@ -31,10 +31,38 @@ struct Args {
     /// resume training from the latest checkpoint in the output directory
     #[argh(switch)]
     resume: bool,
+
+    /// evaluate a checkpoint instead of training
+    #[argh(switch)]
+    eval: bool,
+
+    /// path to the checkpoint file to evaluate (required if --eval is set)
+    #[argh(option)]
+    checkpoint: Option<String>,
 }
 
 fn main() {
     let args: Args = argh::from_env();
+
+    if args.eval {
+        let device = Device::wgpu(Default::default()); // no autodiff for eval
+        let checkpoint_path = args.checkpoint.unwrap_or_else(|| {
+            eprintln!("Error: --checkpoint is required when using --eval");
+            std::process::exit(1);
+        });
+
+        if let Err(e) = training::eval::evaluate(
+            &args.coco_json,
+            &args.coco_images,
+            &checkpoint_path,
+            args.seed,
+            &device,
+        ) {
+            eprintln!("Evaluation failed: {}", e);
+            std::process::exit(1);
+        }
+        return;
+    }
 
     let device = Device::wgpu(Default::default()).autodiff();
 
