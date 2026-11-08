@@ -52,6 +52,12 @@ struct Args {
     /// score threshold for drawing boxes (default 0.3 to avoid clutter)
     #[argh(option, default = "0.3")]
     visualize_threshold: f32,
+
+    /// initialize the backbone with ImageNet weights (PyTorch
+    /// MobileNetV3-Large)
+    #[cfg(feature = "pretrained")]
+    #[argh(switch)]
+    pretrained_backbone: bool,
 }
 
 fn main() {
@@ -87,6 +93,11 @@ fn main() {
 
     let device = Device::wgpu(Default::default()).autodiff();
 
+    #[cfg(not(feature = "pretrained"))]
+    let pretrained_backbone = false;
+    #[cfg(feature = "pretrained")]
+    let pretrained_backbone = args.pretrained_backbone;
+
     if let Err(e) = training::training::trainer::train(
         &args.coco_json,
         &args.coco_images,
@@ -95,6 +106,7 @@ fn main() {
         args.seed,
         &args.output,
         args.resume,
+        pretrained_backbone,
         &device,
     ) {
         eprintln!("{}", e);

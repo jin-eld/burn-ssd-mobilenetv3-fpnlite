@@ -6,9 +6,6 @@ use mobilenetv3::imagenet::{Normalizer, CLASSES, IMAGE_SIZE};
 use std::process;
 use transforms;
 
-#[cfg(not(feature = "pretrained"))]
-use mobilenetv3::MobileNetV3Config;
-
 #[cfg(feature = "pretrained")]
 use mobilenetv3::{weights, MobileNetV3PretrainedConfig};
 

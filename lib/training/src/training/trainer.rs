@@ -26,6 +26,10 @@ use crate::training::ssd_output::{
 use crate::training::ssd_train_step::SSDTrainModel;
 
 use mobilenetv3::MobileNetV3Arch;
+
+#[cfg(feature = "pretrained")]
+use mobilenetv3::{weights, MobileNetV3PretrainedConfig};
+
 use ssd::model::SSDLiteMobileNetV3;
 
 // Generate a deterministic 90/10 train/valid split of indices.
@@ -78,6 +82,44 @@ fn find_latest_checkpoint(
     return Ok(Some(latest));
 }
 
+/// Build the SSD model around a MobileNetV3-Large backbone hydrated with
+/// ImageNet weights (PyTorch). The classifier head is loaded too but never
+/// used — `forward_features` only touches the feature layers.
+#[cfg(feature = "pretrained")]
+fn load_ssd_with_pretrained_backbone(
+    num_classes: usize,
+    device: &Device,
+) -> Result<SSDLiteMobileNetV3, String> {
+    use burn_store::ModuleSnapshot;
+
+    // Hydrate a bare MobileNetV3-Large using the proven CLI path
+    // (downloads the weights and applies the PyTorch key remappings).
+    let (mut backbone, mut store) =
+        MobileNetV3PretrainedConfig::new(weights::MobileNetV3::PyTorchLarge)
+            .init(device)
+            .map_err(|e| {
+                format!("Failed to init pretrained backbone: {}", e)
+            })?;
+
+    let result = backbone
+        .load_from(&mut store)
+        .map_err(|e| format!("Failed to load ImageNet weights: {}", e))?;
+    println!(
+        "Pretrained backbone: applied {} tensors",
+        result.applied.len()
+    );
+    if !result.missing.is_empty() {
+        println!("  missing: {:?}", result.missing);
+    }
+
+    return Ok(SSDLiteMobileNetV3::with_backbone(
+        backbone,
+        MobileNetV3Arch::Large,
+        num_classes,
+        device,
+    ));
+}
+
 pub fn train(
     coco_json: &str,
     coco_images: &str,
@@ -86,6 +128,7 @@ pub fn train(
     seed: u64,
     output: &str,
     resume: bool,
+    pretrained_backbone: bool,
     device: &Device,
 ) -> Result<(), String> {
     let input_w = 320;
@@ -142,8 +185,22 @@ pub fn train(
         .set_device(device.clone())
         .build(dataset_valid);
 
-    let model =
-        SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, num_classes, &device);
+    let model = if pretrained_backbone {
+        #[cfg(feature = "pretrained")]
+        {
+            load_ssd_with_pretrained_backbone(num_classes, &device)?
+        }
+        #[cfg(not(feature = "pretrained"))]
+        {
+            // The CLI gates this flag behind the feature, so this is
+            // unreachable.
+            unreachable!(
+                "pretrained_backbone cannot be true without the feature"
+            );
+        }
+    } else {
+        SSDLiteMobileNetV3::new(MobileNetV3Arch::Large, num_classes, &device)
+    };
 
     let matcher = Matcher::new(0.5, 0.4);
     let encoder = SSDTargetEncoder::new(matcher);
@@ -162,6 +219,12 @@ pub fn train(
     let epochs_file = PathBuf::from(output).join("epochs.txt");
     let mut start_epoch = 0;
     let mut total_epochs = epochs;
+
+    if resume && pretrained_backbone {
+        return Err("Cannot use --pretrained-backbone with --resume. \
+          The checkpoint already contains the trained model weights."
+            .into());
+    }
 
     if resume {
         if !checkpoint_dir.exists() {

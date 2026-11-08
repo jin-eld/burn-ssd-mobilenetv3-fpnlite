@@ -7712,6 +7712,7 @@ dependencies = [
  "burn",
  "burn-dataset",
  "burn-dispatch",
+ "burn-store",
  "image",
  "imageproc",
  "mobilenetv3",

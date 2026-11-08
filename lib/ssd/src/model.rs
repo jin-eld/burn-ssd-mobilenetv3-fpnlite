@@ -61,7 +61,17 @@ impl SSDLiteMobileNetV3 {
             MobileNetV3Arch::Large => backbone_cfg.init_large(device),
             MobileNetV3Arch::Small => backbone_cfg.init_small(device),
         };
+        return Self::with_backbone(backbone, arch, num_classes, device);
+    }
 
+    /// Same as `new`, but around a caller-provided backbone — e.g. one
+    /// hydrated with ImageNet weights for transfer learning.
+    pub fn with_backbone(
+        backbone: MobileNetV3,
+        arch: MobileNetV3Arch,
+        num_classes: usize,
+        device: &Device,
+    ) -> Self {
         // FPNLite
         let fpn_cfg = FpnLiteConfig::new(96, arch);
         let fpn = FpnLite::new(fpn_cfg, device);
